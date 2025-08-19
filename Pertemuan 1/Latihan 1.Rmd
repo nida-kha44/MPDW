@@ -5,4 +5,8 @@ Dalam hal ini akan dibuat variabel x yang bernilai 3
 x=3
 x
 ```
+```{r}
+y=5
+y
+```
 
