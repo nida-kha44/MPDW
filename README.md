@@ -1,2 +1,2 @@
 # mpdw-coba
-Praktikum MPDW 2025 Pertemuan 1
+Praktikum MPDW 2025
