@@ -1,0 +1,413 @@
+---
+title: "mpdw"
+author: "NIda Khairunnissa"
+date: "2025-08-19"
+output: html_document
+---
+
+# Pengenalan Data
+### Input Data
+```{r}
+# impor data
+library(rio)
+data <- import("https://raw.githubusercontent.com/nida-kha44/MPDW/refs/heads/main/Pertemuan%201/btc_historical_price.csv")
+head(data)
+summary(data)
+
+# mengambil baris 1655 - 2485 hasil pembagian dengan teman kelompok
+btcprice <- data[1655:2485, ]
+head(btcprice)
+```
+### Eksplorasi Data
+```{r}
+View(btcprice) # melihat data
+str(btcprice)  # mengetahui struktur data
+dim(btcprice)  # mengetahui dimensi data
+
+summary(btcprice) # menampilkan ringkasan data
+```
+```{r}
+# mengubah data agar menjadi data deret waktu
+btcprice.ts <- ts(btcprice$price)
+summary(btcprice.ts)
+```
+```{r}
+# membuat plot data deret waktu
+ts.plot(btcprice.ts, xlab="Time Period ", ylab="price", 
+        main = "Time Series Plot")
+points(btcprice.ts)
+```
+Dari plot di atas, dapat terlihat bahwa data memiliki pola Non-linear upward trend (eksponensial) dengan volatilitas meningkat. Akan dilakukan pemulusan dengan metode Exponential Smoothing.
+
+## Exponential Smoothing
+Metode *Exponential Smoothing* adalah metode pemulusan dengan melakukan pembobotan menurun secara eksponensial. Nilai yang lebih baru diberi bobot yang lebih besar dari nilai terdahulu. Terdapat satu atau lebih parameter pemulusan yang ditentukan secara eksplisit, dan hasil pemilihan parameter tersebut akan menentukan bobot yang akan diberikan pada nilai pengamatan. Ada dua macam model, yaitu model tunggal dan ganda.
+
+### Pembagian Data
+
+Pembagian data latih dan data uji dilakukan dengan perbandingan 80% data latih dan 20% data uji.
+
+```{r}
+#membagi training dan testing
+training <- btcprice[1:664, ]   
+testing <- btcprice[665:831, ]   
+train.ts <- ts(training$price)
+test.ts <- ts(testing$price)
+```
+
+### Eksplorasi
+
+Eksplorasi dilakukan dengan membuat plot data deret waktu untuk keseluruhan data, data latih, dan data uji.
+
+```{r}
+#eksplorasi data
+plot(btcprice.ts, col="black",main="Plot semua data")
+points(btcprice.ts)
+
+plot(train.ts, col="red",main="Plot data latih")
+points(train.ts)
+
+plot(test.ts, col="blue",main="Plot data uji")
+points(test.ts)
+```
+
+
+### DES
+
+Metode pemulusan *Double Exponential Smoothing* (DES) digunakan untuk data yang memiliki pola tren. Metode DES adalah metode semacam SES, hanya saja dilakukan dua kali, yaitu pertama untuk tahapan 'level' dan kedua untuk tahapan 'tren'. Pemulusan menggunakan metode ini akan menghasilkan peramalan tidak konstan untuk periode berikutnya.
+
+Pemulusan dengan metode DES kali ini akan menggunakan fungsi `HoltWinters()` . Jika sebelumnya nilai argumen `beta` dibuat `FALSE` , kali ini argumen tersebut akan diinisialisasi bersamaan dengan nilai `alpha` .
+
+```{r}
+#Lamda=0.2 dan gamma=0.2
+des.1<- HoltWinters(train.ts, gamma = FALSE, beta = 0.2, alpha = 0.2)
+plot(des.1)
+
+#ramalan
+library(forecast)
+ramalandes1<- forecast(des.1, h=167)
+ramalandes1
+
+#Lamda=0.6 dan gamma=0.3
+des.2<- HoltWinters(train.ts, gamma = FALSE, beta = 0.3, alpha = 0.6)
+plot(des.2)
+
+#ramalan
+ramalandes2<- forecast(des.2, h=167)
+ramalandes2
+```
+Selanjutnya ingin dibandingkan plot data latih dan data uji adalah sebagai berikut.
+
+```{r}
+#Visually evaluate the prediction
+plot(btcprice.ts)
+lines(des.1$fitted[,1], lty=2, col="blue")
+lines(ramalandes1$mean, col="red")
+```
+
+Untuk mendapatkan nilai parameter optimum dari DES, argumen `alpha` dan `beta` dapat dibuat `NULL` seperti berikut.
+
+```{r}
+#Lamda dan gamma optimum
+des.opt<- HoltWinters(train.ts, gamma = FALSE)
+des.opt
+plot(des.opt)
+
+#ramalan
+ramalandesopt<- forecast(des.opt, h=167)
+ramalandesopt
+```
+
+Selanjutnya akan dilakukan perhitungan akurasi pada data latih maupun data uji dengan ukuran akurasi SSE, MSE dan MAPE.
+
+#### Akurasi Data Latih
+
+```{r}
+#Akurasi Data Training
+ssedes.train1<-des.1$SSE
+msedes.train1<-ssedes.train1/length(train.ts)
+sisaandes1<-ramalandes1$residuals
+head(sisaandes1)
+
+mapedes.train1 <- sum(abs(sisaandes1[3:length(train.ts)]/train.ts[3:length(train.ts)])
+                      *100)/length(train.ts)
+
+akurasides.1 <- matrix(c(ssedes.train1,msedes.train1,mapedes.train1))
+row.names(akurasides.1)<- c("SSE", "MSE", "MAPE")
+colnames(akurasides.1) <- c("Akurasi lamda=0.2 dan gamma=0.2")
+akurasides.1
+
+ssedes.train2<-des.2$SSE
+msedes.train2<-ssedes.train2/length(train.ts)
+sisaandes2<-ramalandes2$residuals
+head(sisaandes2)
+
+mapedes.train2 <- sum(abs(sisaandes2[3:length(train.ts)]/train.ts[3:length(train.ts)])
+                      *100)/length(train.ts)
+
+akurasides.2 <- matrix(c(ssedes.train2,msedes.train2,mapedes.train2))
+row.names(akurasides.2)<- c("SSE", "MSE", "MAPE")
+colnames(akurasides.2) <- c("Akurasi lamda=0.6 dan gamma=0.3")
+akurasides.2
+```
+Hasil pemulusan time series menunjukkan bahwa model dengan parameter λ = 0.6 dan γ = 0.3 memiliki performa yang lebih baik dibandingkan dengan model λ = 0.2 dan γ = 0.2. Hal ini terlihat dari nilai SSE, MSE, dan MAPE yang lebih kecil, yaitu masing-masing sebesar 376,912; 567; dan 2.09%. Sementara itu, model pertama menghasilkan nilai kesalahan yang lebih besar, yaitu SSE = 838,807; MSE = 1,263; dan MAPE = 3.29%. Dengan demikian, dapat disimpulkan bahwa model dengan λ = 0.6 dan γ = 0.3 lebih sesuai digunakan untuk meramalkan data karena memberikan tingkat akurasi yang lebih tinggi.
+
+#### Akurasi Data Uji
+
+```{r}
+# Akurasi Data Uji
+# Cek dan sesuaikan panjang dulu
+common_length <- min(length(ramalandes1$mean), length(testing$price))
+
+# Akurasi Data Testing - FIXED
+selisihdes1 <- ramalandes1$mean[1:common_length] - testing$price[1:common_length]
+SSEtestingdes1 <- sum(selisihdes1^2)
+MSEtestingdes1 <- SSEtestingdes1/common_length
+MAPEtestingdes1 <- sum(abs(selisihdes1/testing$price[1:common_length])*100)/common_length
+
+selisihdes2 <- ramalandes2$mean[1:common_length] - testing$price[1:common_length]
+SSEtestingdes2 <- sum(selisihdes2^2)
+MSEtestingdes2 <- SSEtestingdes2/common_length
+MAPEtestingdes2 <- sum(abs(selisihdes2/testing$price[1:common_length])*100)/common_length
+
+selisihdesopt <- ramalandesopt$mean[1:common_length] - testing$price[1:common_length]
+SSEtestingdesopt <- sum(selisihdesopt^2)
+MSEtestingdesopt <- SSEtestingdesopt/common_length
+MAPEtestingdesopt <- sum(abs(selisihdesopt/testing$price[1:common_length])*100)/common_length
+
+# Buat matrix akurasi
+akurasitestingdes <- matrix(
+  c(SSEtestingdes1, MSEtestingdes1, MAPEtestingdes1,
+    SSEtestingdes2, MSEtestingdes2, MAPEtestingdes2,
+    SSEtestingdesopt, MSEtestingdesopt, MAPEtestingdesopt),
+  nrow = 3, ncol = 3, byrow = FALSE
+)
+
+row.names(akurasitestingdes) <- c("SSE", "MSE", "MAPE")
+colnames(akurasitestingdes) <- c("des ske1", "des ske2", "des opt")
+
+print(akurasitestingdes)
+```
+Kesimpulan: model des.ske1 memberikan hasil ramalan terbaik dibandingkan dengan model des.ske2 dan des.opt. Nilai SSE (9.02×10⁷), MSE (5.43×10⁵), dan MAPE (17.94%) dari des.ske1 semuanya lebih kecil daripada dua model lainnya. Hal ini menunjukkan bahwa kesalahan prediksi model des.ske1 relatif paling rendah, sehingga model tersebut lebih sesuai digunakan untuk meramalkan data. Sebaliknya, model des.opt memiliki error yang paling besar pada semua ukuran (SSE, MSE, maupun MAPE), sehingga performanya paling buruk di antara ketiga model.
+
+
+#### Peramalan
+
+```{r}
+#Forecast
+forecast1 <- predict(des.1, n.ahead = 167)
+forecast2 <- predict(des.2, n.ahead = 167)
+forecast.opt <- predict(des.opt, n.ahead = 167)
+```
+
+#### Plot Deret Waktu
+
+```{r}
+library(forecast)
+
+# Misalnya meramalkan 10 periode ke depan
+horizon <- 200
+
+# Forecast dengan horizon baru (future forecasting)
+forecast_des1 <- forecast(ramalandes1$model, h = horizon)
+forecast_des2 <- forecast(ramalandes2$model, h = horizon)
+forecast_desopt <- forecast(ramalandesopt$model, h = horizon)
+
+# Lihat hasil peramalan
+forecast_des1
+forecast_des2
+forecast_desopt
+
+# Plot hasil peramalan
+plot(forecast_des1, main = "Peramalan DES1 (200 periode ke depan)")
+plot(forecast_des2, main = "Peramalan DES2 (200 periode ke depan)")
+plot(forecast_desopt, main = "Peramalan DES Optimal (200 periode ke depan)")
+
+```
+
+```{r}
+# Plot data aktual (training)
+plot(train.ts, main="Forecasting dengan Double Exponential Smoothing",
+     type="l", col="black", xlim=c(1, length(train.ts) + horizon),
+     xlab="Time", ylab="Value")
+
+# Tambahkan hasil ramalan
+lines(forecast_des1$mean, col="red", lty=1)
+lines(forecast_des2$mean, col="blue", lty=1)
+lines(forecast_desopt$mean, col="green", lty=1)
+
+# (Opsional) Tambahkan interval prediksi model terbaik
+lines(forecast_desopt$lower[,2], col="green", lty=2)
+lines(forecast_desopt$upper[,2], col="green", lty=2)
+
+# Tambahkan legend
+legend("topleft",
+       legend=c("Data Aktual", "DES1", "DES2", "DES Optimal"),
+       col=c("black", "red", "blue", "green"),
+       lty=1, cex=0.7)
+
+```
+
+
+#### Akurasi Data Latih
+
+```{r}
+# --- Akurasi untuk model des.1 ---
+SSE1 <- des.1$SSE
+MSE1 <- des.1$SSE / length(train.ts)
+RMSE1 <- sqrt(MSE1)
+
+# --- Akurasi untuk model des.2 ---
+SSE2 <- des.2$SSE
+MSE2 <- des.2$SSE / length(train.ts)
+RMSE2 <- sqrt(MSE2)
+
+# --- Akurasi untuk model des.opt ---
+SSE.opt <- des.opt$SSE
+MSE.opt <- des.opt$SSE / length(train.ts)
+RMSE.opt <- sqrt(MSE.opt)
+
+# --- Gabungkan ke dalam 1 data frame ---
+akurasi.train <- data.frame(
+  Model = c("des.1 (α=0.2, β=0.2)", "des.2 (α=0.6, β=0.3)", "des.opt (optimal)"),
+  SSE = c(SSE1, SSE2, SSE.opt),
+  MSE = c(MSE1, MSE2, MSE.opt),
+  RMSE = c(RMSE1, RMSE2, RMSE.opt)
+)
+
+akurasi.train
+
+```
+
+#### Akurasi Data Uji
+
+```{r}
+# --- Akurasi Data Testing untuk des.1 ---
+forecast1 <- data.frame(ramalandes1$mean)   # ambil nilai ramalan
+testing.df <- data.frame(test.ts)           # ubah test.ts ke data frame
+selisih1 <- forecast1 - testing.df
+SSEtest1 <- sum(selisih1^2)
+MSEtest1 <- SSEtest1 / length(test.ts)
+RMSEtest1 <- sqrt(MSEtest1)
+
+# --- Akurasi Data Testing untuk des.2 ---
+forecast2 <- data.frame(ramalandes2$mean)
+selisih2 <- forecast2 - testing.df
+SSEtest2 <- sum(selisih2^2)
+MSEtest2 <- SSEtest2 / length(test.ts)
+RMSEtest2 <- sqrt(MSEtest2)
+
+# --- Akurasi Data Testing untuk des.opt ---
+forecast.opt <- data.frame(ramalandesopt$mean)
+selisih.opt <- forecast.opt - testing.df
+SSEtest.opt <- sum(selisih.opt^2)
+MSEtest.opt <- SSEtest.opt / length(test.ts)
+RMSEtest.opt <- sqrt(MSEtest.opt)
+
+# --- Gabungkan hasil ke dalam tabel ---
+akurasi.test <- data.frame(
+  Model = c("des.1 (α=0.2, β=0.2)", 
+            "des.2 (α=0.6, β=0.3)", 
+            "des.opt (optimal)"),
+  SSE_Test = c(SSEtest1, SSEtest2, SSEtest.opt),
+  MSE_Test = c(MSEtest1, MSEtest2, MSEtest.opt),
+  RMSE_Test = c(RMSEtest1, RMSEtest2, RMSEtest.opt)
+)
+
+akurasi.test
+
+```
+
+```{r}
+length(test.ts)                 # panjang data uji
+length(ramalandesopt$mean)      # panjang hasil ramalan
+
+```
+
+
+
+
+```{r}
+# ambil vektor forecast dan testing dengan panjang yang sama
+n <- min(length(test.ts), length(ramalandes1$mean))
+
+forecast1 <- as.numeric(ramalandes1$mean[1:n])
+testing.vec <- as.numeric(test.ts[1:n])
+
+# cek beberapa nilai dulu
+head(forecast1)
+head(testing.vec)
+
+# selisih
+selisih1 <- forecast1 - testing.vec
+head(selisih1)
+
+# hitung error
+SSEtest1 <- sum(selisih1^2)
+MSEtest1 <- mean(selisih1^2)
+RMSEtest1 <- sqrt(MSEtest1)
+
+SSEtest1; MSEtest1; RMSEtest1
+
+```
+
+```{r}
+head(test.ts)
+tail(test.ts)
+
+head(ramalandes1$mean)
+tail(ramalandes1$mean)
+
+
+```
+
+```{r}
+# fungsi untuk hitung SSE, MSE, RMSE antara ramalan & testing
+hitung_error <- function(ramalan, testing){
+  n <- min(length(testing), length(ramalan$mean))  # samakan panjang
+  forecast.vec <- as.numeric(ramalan$mean[1:n])    # vektor forecast
+  testing.vec  <- as.numeric(testing[1:n])         # vektor testing
+  
+  selisih <- forecast.vec - testing.vec
+  
+  SSE <- sum(selisih^2)
+  MSE <- mean(selisih^2)
+  RMSE <- sqrt(MSE)
+  
+  return(c(SSE=SSE, MSE=MSE, RMSE=RMSE))
+}
+
+# hitung untuk semua model
+err1  <- hitung_error(ramalandes1, test.ts)
+err2  <- hitung_error(ramalandes2, test.ts)
+errop <- hitung_error(ramalandesopt, test.ts)
+
+# gabungkan jadi tabel
+akurasi.test <- data.frame(
+  Model = c("des.1 (α=0.2, β=0.2)", 
+            "des.2 (α=0.6, β=0.3)", 
+            "des.opt (optimal)"),
+  SSE_Test = c(err1["SSE"], err2["SSE"], errop["SSE"]),
+  MSE_Test = c(err1["MSE"], err2["MSE"], errop["MSE"]),
+  RMSE_Test = c(err1["RMSE"], err2["RMSE"], errop["RMSE"])
+)
+
+akurasi.test
+
+```
+
+Kesimpulan: hasil evaluasi menggunakan data testing, model des.1 (α=0.2, β=0.2) menghasilkan nilai SSE sebesar 90,235,151 dan MSE sebesar 540,330, lebih rendah dibandingkan model des.2 (α=0.6, β=0.3) yang memiliki SSE 99,399,886 dan MSE 595,208. Sementara itu, model des.opt (parameter optimal dari fungsi HoltWinters) justru menunjukkan error yang jauh lebih besar, yaitu SSE 387,317,450 dan MSE 2,319,266. Hal ini menunjukkan bahwa pada data BTC yang digunakan, model dengan parameter α=0.2 dan β=0.2 (des.1) lebih baik dalam memprediksi harga dibandingkan dua model lainnya.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
