@@ -1,0 +1,182 @@
+---
+title: "Tukul MPDW 2"
+author: "NIda Khairunnissa"
+date: "2025-08-13"
+output: html_document
+---
+
+
+
+### Step 1: Input Data IPM
+```{r}
+# impor data
+library(rio)
+ipmJatim <- import("https://raw.githubusercontent.com/nida-kha44/MPDW/refs/heads/main/Pertemuan%202/Jatim.csv")
+print(ipmJatim)
+summary(ipmJatim)
+```
+
+
+
+### Step 2: Membuat Model Awal dengan OLS
+```{r}
+# Membuat model regresi OLS (Ordinary Least Squares)
+model_awal <- lm(ipm ~ tahun, data = ipmJatim)
+summary(model_awal)
+```
+### Step 3: Identifikasi Lanjutan
+#### 3.1 Diagnosis Visual
+
+```{r}
+# Ambil sisaan dari model
+sisaan_awal <- residuals(model_awal)
+
+# Plot sisaan terhadap waktu
+plot(ipmJatim$tahun, sisaan_awal, type="o", pch=20, col="red",
+     main="Plot Sisaan vs Waktu", xlab="Tahun", ylab="Sisaan")
+abline(h=0, lty=2) # Garis referensi di y=0
+```
+Plot di atas menunjukkan pola yang **tidak acak**. Perhatikan bagaimana sisaan cenderung berkelompok: titik pertama di bawah nol, lalu naik ke atas nol, dan turun lagi. Ini adalah gejala visual yang kuat dari autokorelasi positif. Sisaan positif cenderung diikuti sisaan positif, dan sebaliknya.
+
+#### 3.2. Diagnosis Formal (Uji Durbin-Watson)
+
+Visual saja tidak cukup, kita butuh bukti formal. Kita gunakan Uji Durbin-Watson.
+
+-   **H0 (Hipotesis Nol)**: Tidak ada autokorelasi. Sisaan saling bebas.
+
+-   **H1 (Hipotesis Alternatif)**: Ada autokorelasi.
+
+```{r}
+library(lmtest)
+dwtest(model_awal)
+```
+p-value yang dihasilkan sangat kecil (3.91e-06) dan berada di bawah tingkat signifikansi 5%, artinya Tolak H0. Berarti terbukti bahwa model berautokorelasi.
+
+
+### Step 4: Penanganan
+
+#### 4.1 Metode Cochrane-Orcutt
+
+```{r}
+library(orcutt)
+# Dengan fungsi R
+model_co <- cochrane.orcutt(model_awal)
+summary(model_co)
+
+rho <- model_co$rho # rho paling optimum
+cat("Rho optimum:", rho)
+```
+Setelah dilakukan koreksi menggunakan metode Cochrane-Orcutt, diperoleh model baru dengan koefisien regresi yang tetap signifikan dan residual standard error yang lebih kecil. Nilai R2 model sedikit menurun menjadi 95,05%, tetapi autokorelasi berhasil diatasi (DW = 1,8315; p > 0,05).
+
+```{r}
+# Dengan Perhitungan Manual
+ipm.trans <- ipmJatim$ipm[-1] - ipmJatim$ipm[-12]*rho
+
+tahun.trans <- ipmJatim$tahun[-1] - ipmJatim$tahun[-12]*rho
+model_co_manual <- lm(ipm.trans~tahun.trans)
+
+b0_co_manual <- coef(model_co_manual)[1]/(1-rho)
+b1_co_manual <- coef(model_co_manual)[2]
+cat("Koefisien manual Cochrane-Orcutt:\n")
+cat("b0:", b0_co_manual, "\n")
+cat("b1:", b1_co_manual, "\n")
+```
+
+#### 4.2 Metode hildreth-Lu
+```{r}
+#Penanganan Autokorelasi Hildreth lu
+# Hildreth-Lu
+hildreth.lu.func<- function(r, model){
+  x <- model.matrix(model)[,-1]
+  y <- model.response(model.frame(model))
+  n <- length(y)
+  t <- 2:n
+  y <- y[t]-r*y[t-1]
+  x <- x[t]-r*x[t-1]
+  
+  return(lm(y~x))
+}
+
+#Pencariab rho yang meminimumkan SSE
+r <- c(seq(0.1,0.9, by= 0.1))
+tab <- data.frame("rho" = r, "SSE" = sapply(r, function(i){deviance(hildreth.lu.func(i, model_awal))}))
+round(tab, 4)
+```
+Pertama-tama akan dicari di mana kira-kira ρ yang menghasilkan SSE minimum. Pada hasil di atas terlihat ρminimum ketika 0.7. Namun, hasil tersebut masih kurang teliti sehingga akan dicari kembali ρ yang lebih optimum dengan ketelitian yang lebih. Jika sebelumnya jarak antar ρ yang dicari adalah 0.1, kali ini jarak antar ρ adalah 0.001 dan dilakukan pada selang 0.2 sampai dengan 0.5.
+
+```{r}
+#Rho optimal di sekitar 0.4
+rOpt <- seq(0.2,0.8, by= 0.001)
+tabOpt <- data.frame("rho" = rOpt, "SSE" = sapply(rOpt, function(i){deviance(hildreth.lu.func(i, model_awal))}))
+print(tabOpt[order(tabOpt$SSE),])
+```
+
+
+```{r}
+#Grafik SSE optimum
+par(mfrow = c(1,1))
+plot(tab$SSE ~ tab$rho , type = "l", xlab = "Rho", ylab = "SSE")
+abline(v = tabOpt[tabOpt$SSE==min(tabOpt$SSE),"rho"], lty = 2, col="red",lwd=2)
+text(x=0.737, y=0.2543887, labels = "rho=0.737", cex = 0.8)
+```
+Dari tabel dan plot di atas, dapat diketahui rho optimum adalah 0.737
+
+```{r}
+library(HoRM)
+model_hl <- hildreth.lu(ipmJatim$ipm, ipmJatim$tahun, rho = 0.737)
+summary(model_hl)
+```
+
+```{r}
+#Transformasi Balik
+cat("y = ", coef(model_hl)[1]/(1-0.341), "+", coef(model_hl)[2],"x", sep = "")
+```
+
+```{r}
+#Deteksi autokorelasi
+dwtest(model_hl)
+```
+Hasil estimasi regresi Hildreth-Lu menunjukkan bahwa variabel x berpengaruh positif dan signifikan terhadap y, dengan koefisien sebesar 0.5570. Hal ini berarti setiap peningkatan 1 unit pada x akan meningkatkan nilai y sebesar 0.5570 unit. Model memiliki tingkat kecocokan yang sangat tinggi, ditunjukkan dengan nilai R2 sebesar 95,05%. Selain itu, hasil uji Durbin-Watson menghasilkan nilai DW = 1,83 dengan p-value = 0,2556, yang mengindikasikan bahwa tidak terdapat autokorelasi pada residual model.
+
+
+#### Tahap 5: Evaluasi Akhir
+```{r}
+# Menghitung SSE untuk setiap model secara manual
+sse_awal <- sum(residuals(model_awal)^2)
+sse_co <- sum(residuals(model_co)^2)
+sse_hl <- sum(residuals(model_hl)^2)
+
+# Membuat tabel perbandingan
+data.frame(
+  Metode = c("Model Awal (Sakit)", "Cochrane-Orcutt (Sehat)", "Hildreth-Lu (Sehat)"),
+  SSE = c(sse_awal, sse_co, sse_hl),
+  DW_Statistic = c(dwtest(model_awal)$statistic, model_co$DW[3], dwtest(model_hl)$statistic)
+)
+
+```
+
+Hasil perbandingan tiga metode menunjukkan bahwa model awal memiliki nilai SSE yang relatif kecil (0.8448), tetapi bermasalah karena uji Durbin-Watson menunjukkan adanya autokorelasi positif yang cukup kuat (DW = 0.4288). Setelah dilakukan perbaikan menggunakan metode Cochrane-Orcutt, nilai Durbin-Watson meningkat menjadi 1.8315 sehingga masalah autokorelasi berhasil diatasi, meskipun SSE meningkat menjadi 2.4036. Sementara itu, metode Hildreth-Lu menghasilkan performa terbaik dengan nilai SSE paling kecil (0.2544) dan statistik Durbin-Watson sebesar 1.8317 yang mengindikasikan tidak adanya autokorelasi. Dengan demikian, model Hildreth-Lu dapat dikatakan sebagai metode yang paling optimal karena mampu menghasilkan model yang sehat sekaligus meminimalkan error.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
