@@ -1,0 +1,278 @@
+---
+title: "TP MPDW Pert 3"
+author: "NIda Khairunnissa"
+date: "2025-09-11"
+output: html_document
+---
+
+## Pemilihan Variabel
+Kualitas udara merupakan salah satu isu lingkungan yang paling dekat dengan kehidupan masyarakat sehari-hari. Indeks Kualitas Udara (Air Quality Index/AQI) banyak digunakan sebagai indikator sederhana untuk menilai apakah udara yang dihirup aman atau berbahaya bagi kesehatan. Dalam data yang tersedia, AQI dipengaruhi oleh berbagai polutan seperti CO, NO₂, O₃, PM₁₀, PM₂.₅, dan SO₂. Dari sekian banyak variabel, PM₂.₅ (particulate matter dengan diameter ≤ 2.5 µm) dipilih sebagai fokus analisis karena partikelnya sangat kecil sehingga mudah masuk ke dalam sistem pernapasan dan aliran darah, serta secara langsung berkaitan dengan peningkatan risiko penyakit pernapasan maupun kardiovaskular. Selain itu, PM₂.₅ juga merupakan komponen utama dalam perhitungan AQI menurut standar WHO dan US EPA, sehingga pemantauannya sangat penting.
+
+## Tujuan Analisis
+Analisis ini dilakukan untuk memodelkan bagaimana nilai AQI ($Y_t$) dipengaruhi oleh variabel bebas ($X$), baik dari nilai saat ini maupun dari nilai masa lalunya ($X_{t-1}, X_{t-2}, \dots$), serta mempertimbangkan pengaruh nilai masa lalu dari AQI itu sendiri ($Y_{t-1}, Y_{t-2}, \dots$). Beberapa metode deret waktu yang akan diterapkan meliputi model Koyck, Distributed Lag Model (DLM), dan Autoregressive Distributed Lag (ARDL) yang nantinya akan ditentukan metode terbaik yang mampu menggambarkan hubungan jangka pendek maupun jangka panjang antara PM₂.₅ dan AQI.
+
+## Packages
+```{r}
+#PACKAGES
+library(dLagM)
+library(dynlm)
+library(MLmetrics)
+library(lmtest)
+library(car)
+```
+
+
+## Input Data
+```{r}
+data <- rio::import("https://raw.githubusercontent.com/nida-kha44/MPDW/refs/heads/main/NewDelhi_Air_quality.csv")
+str(data)
+data
+```
+
+## Eksplorasi
+```{r}
+# 2. Lihat struktur data
+str(data)
+summary(data)
+
+# 3. Cek missing value
+colSums(is.na(data))
+
+# 4. Statistik deskriptif variabel numerik
+library(psych)
+describe(data[, c("AQI","CO","no2","o3","pm10","pm25","so2")])
+
+# 5. Korelasi dengan AQI
+cor(data$AQI, data$CO, use="complete.obs")
+cor_matrix <- cor(data[, c("AQI","CO","no2","o3","pm10","pm25","so2")], use="complete.obs")
+cor_matrix
+
+# 6. Plot hubungan AQI dengan variabel numerik lain
+library(ggplot2)
+
+# Scatterplot untuk semua variabel
+num_vars <- c("CO","no2","o3","pm10","pm25","so2")
+for (var in num_vars) {
+  print(
+    ggplot(data, aes_string(x=var, y="AQI")) +
+      geom_point(alpha=0.6, color="steelblue") +
+      geom_smooth(method="lm", se=FALSE, color="red") +
+      labs(title=paste("Hubungan AQI dengan", var),
+           x=var, y="AQI")
+  )
+}
+
+# 7. Heatmap korelasi biar gampang lihat pola
+library(reshape2)
+melted_corr <- melt(cor_matrix)
+
+ggplot(melted_corr, aes(x=Var1, y=Var2, fill=value)) +
+  geom_tile() +
+  scale_fill_gradient2(low="blue", high="red", mid="white",
+                       midpoint=0, limit=c(-1,1), space="Lab",
+                       name="Korelasi") +
+  theme_minimal() +
+  labs(title="Heatmap Korelasi antar Variabel")
+
+```
+Dari visualisasi scatter plot antara AQI dan PM2.5, terlihat adanya pola hubungan negatif di mana kenaikan konsentrasi PM2.5 cenderung diikuti dengan penurunan kualitas indeks udara (AQI). Hal ini relevan karena AQI memang dirancang sebagai indikator kualitas udara yang dipengaruhi langsung oleh polutan-partikulat, salah satunya PM2.5. Dengan demikian, pemilihan variabel AQI sebagai variabel dependen dan PM2.5 sebagai variabel independen didukung secara teoritis maupun empiris, mengingat PM2.5 merupakan salah satu kontributor utama penurunan kualitas udara di perkotaan.
+
+## Input Data Terpilih
+```{r}
+dataaqi <- rio::import("https://raw.githubusercontent.com/nida-kha44/MPDW/refs/heads/main/Pertemuan%203/Data%20AQI-PM2.5.csv")
+str(dataaqi)
+dataaqi
+```
+
+## Pembagian Data
+
+Pembagian data dengan 80% data sebagai data train dan 20% data sebagai data test. Proporsi ini dipilih karena dianggap seimbang antara kebutuhan model untuk belajar pola dari data dan kebutuhan evaluasi model dengan data yang belum pernah dilihat sebelumnya.
+```{r}
+#SPLIT DATA
+train<-dataaqi[1:58,]
+test<-dataaqi[59:72,]
+```
+
+```{r}
+#data time series
+train.ts<-ts(train)
+test.ts<-ts(test)
+data.ts<-ts(dataaqi)
+```
+
+## Model Koyck
+Model Koyck adalah salah satu model regresi dinamis yang digunakan untuk menganalisis hubungan antara variabel independen (X) dan variabel dependen (Y) dengan adanya pengaruh lag (efek masa lalu). Secara matematis, Koyck menyederhanakan model yang memiliki tak hingga lag menjadi model yang jauh lebih simpel dengan memasukkan **lag dari variabel dependen** $(Y_{t−1})$ sebagai salah satu prediktor. $Y_{t−1}$ ini secara implisit sudah merangkum semua informasi dari lag X di masa lalu.
+
+**Formula Umum:**
+
+$$ y_t=a(1-\lambda)+\beta_0X_t+\beta_1Z_t+\lambda Y_{t-1}+V_t $$
+
+dengan $$V_t=u_t-\lambda u_{t-1}$$
+
+Di mana $\lambda$ (koefisien dari $Y_{t−1}$) menunjukkan "tingkat peluruhan" atau seberapa cepat pengaruh masa lalu memudar.
+
+### Pemodelan dengan Model Koyck
+
+```{r}
+#MODEL KOYCK
+model.koyck <- koyckDlm(x = train$X_t, y = train$Y_t)
+sumkoyck <- summary(model.koyck)
+AIC(model.koyck)
+BIC(model.koyck)
+```
+
+Berdasarkan hasil estimasi model, persamaan yang terbentuk adalah
+
+$$
+\hat{Y_t}=4.0771-0.5723X_t+0.8897Y_{t-1}
+$$
+
+Koefisien Xt sebesar −0.5723 signifikan pada taraf 5%, yang berarti variabel X saat ini memiliki pengaruh negatif terhadap Y, yaitu setiap kenaikan satu satuan X akan menurunkan Y sebesar 0.57 satuan dalam jangka pendek, dengan asumsi faktor lain konstan. Selanjutnya, koefisien Y(t−1) sebesar 0.8897 signifikan pada taraf 1%, yang menunjukkan bahwa sekitar 89% variasi Y di periode sebelumnya terbawa ke periode saat ini. Dengan kata lain, model ini menangkap adanya efek keterlambatan (lag effect) yang cukup kuat. Nilai R^2 sebesar 0.8273 juga menunjukkan bahwa model dapat menjelaskan sekitar 82,7% variasi Y, sehingga model memiliki kemampuan penjelasan yang baik.
+
+### Peramalan dan Akurasi
+
+Berikut adalah hasil peramalan y untuk 14 periode kedepan menggunakan model koyck
+```{r}
+fore.koyck <- forecast(model = model.koyck, x=test$X_t, h=14)
+fore.koyck
+mape.koyck <- MAPE(fore.koyck$forecasts, test$Y_t)
+mape.koyck #data test
+#akurasi data training
+GoF(model.koyck)
+```
+
+Model tersebut merupakan model yang sangat baik dengan nilai MAPE yang kurang dari 10%.
+
+
+## Regression with Distributed Lag
+Regression with Distributed Lag (DLM) adalah model regresi yang digunakan ketika pengaruh suatu variabel bebas (X) terhadap variabel terikat (Y) tidak terjadi sekaligus pada periode yang sama, melainkan terdistribusi (menyebar) ke beberapa periode berikutnya.
+
+
+### *Lag* Optimum
+Mencari panjang lag yang paling optimal berdasarkan kriteria informasi seperti **AIC (Akaike Information Criterion)**. AIC menyeimbangkan antara kecocokan model dengan kompleksitasnya.
+
+```{r}
+#penentuan lag optimum 
+finiteDLMauto(formula = Y_t ~ X_t,
+              data = data.frame(train), q.min = 1, q.max = 10,
+              model.type = "dlm", error.type = "AIC", trace = TRUE)
+```
+Lag optimum = 10 karena memberikan keseimbangan terbaik (AIC/BIC terkecil + MASE kecil + R² adjusted cukup tinggi).
+
+### Pemodelan (Lag=10)
+
+```{r}
+model.dlm <- dlm(x = train$X_t,y = train$Y_t , q = 10)
+sumdlm <- summary(model.dlm)
+AIC(model.dlm)
+BIC(model.dlm)
+```
+Dari hasil di atas, didapat bahwa $P$-value dari intercept, $x_t$, $x_{t-7}$, dan $x_{t-10}$ lebih kecil dari 0.05. Hal ini menunjukkan bahwa keempat komponen tersebut berpengaruh signifikan terhadap $Y$. Dengan demikian, model keseluruhan yang terbentuk adalah:
+
+$$
+\hat{Y_t}=39.894-15.772X_t-16.886X_{t-7}-4.613X_{t-10}
+$$
+### Peramalan dan Akurasi
+
+Berikut merupakan hasil peramalan $y$ untuk 14 periode kedepan
+
+```{r}
+fore.dlm <- forecast(model = model.dlm, x=test$X_t, h=14)
+fore.dlm
+mape.dlm <- MAPE(fore.dlm$forecasts, test$Y_t)
+mape.dlm
+#akurasi data training
+GoF(model.dlm)
+```
+
+Model tersebut merupakan model yang sangat baik dengan nilai MAPE yang kurang dari 10%.
+
+
+##  Autoregressive Distributed Lag (ARDL)
+Autoregressive Distributed Lag (ARDL) model adalah salah satu bentuk model regresi dinamis yang digunakan untuk menganalisis hubungan antara variabel dependen dengan variabel independen, baik dalam jangka pendek maupun jangka panjang.
+
+### Pemodelan
+Dengan $p$ adalah integer yang mewakili panjang *lag* yang terbatas dan $q$ adalah integer yang merepresentasikan ordo dari proses *autoregressive*.
+
+```{r}
+model.ardl <- ardlDlm(x = train$X_t, y = train$Y_t, p = 10 , q = 1)
+summary(model.ardl)
+AIC(model.ardl)
+BIC(model.ardl)
+```
+
+Dari hasil di atas, didapat bahwa $P$-value dari intercept, $Y_{t-1}$, $x_t$, $x_{t-7}$, dan $x_{t-10}$ lebih kecil dari 0.05. Hal ini menunjukkan bahwa keempat komponen tersebut berpengaruh signifikan terhadap $Y$. Dengan demikian, model keseluruhan yang terbentuk adalah:
+
+$$
+\hat{Y_t}=6.352-8.102X_t-7.458X_{t-7}-1.799X_{t-10}+0.856Y_{t-1}
+$$
+### Peramalan dan Akurasi
+
+```{r}
+model.ardl <- ardlDlm(formula = Y_t ~ X_t, data = train, p = 10, q = 1)
+
+sumardl <- summary(model.ardl)
+AIC(model.ardl)
+BIC(model.ardl)
+
+```
+```{r}
+fore.ardl <- forecast(model = model.ardl, x=test$X_t, h=14)
+fore.ardl
+```
+
+Data di atas merupakan hasil peramalan untuk 14 periode ke depan menggunakan Model Autoregressive dengan $p=10$ dan $q=1$.
+
+
+```{r}
+mape.ardl <- MAPE(fore.ardl$forecasts, test$Y_t)
+mape.ardl
+#akurasi data training
+GoF(model.ardl)
+```
+
+Model tersebut merupakan model yang sangat baik dengan nilai MAPE yang kurang dari 10% dan terlihat bahwa nilai MAPE keduanya tidak jauh berbeda. Artinya, model regresi dengan distribusi lag ini tidak`overfitted` atau `underfitted`.
+
+## Perbandingan
+```{r}
+comparison <- data.frame(
+  Model = c("Koyck", "DLM (Lag=10)", "ARDL (p=10, q=1)"),
+  AIC   = c(AIC(model.koyck), AIC(model.dlm), AIC(model.ardl)),
+  BIC   = c(BIC(model.koyck), BIC(model.dlm), BIC(model.ardl)),
+  MAPE  = c(mape.koyck, mape.dlm, mape.ardl)
+)
+
+comparison
+
+```
+
+Berdasarkan hasil perbandingan, model ARDL (p=10, q=1) dipilih sebagai model terbaik karena memiliki nilai AIC dan BIC paling kecil dibandingkan model lainnya, yang menunjukkan keseimbangan terbaik antara ketepatan model dan kompleksitas. Meskipun model Koyck memiliki MAPE lebih rendah sehingga relatif lebih baik dalam akurasi prediksi jangka pendek, tetapi secara keseluruhan kriteria informasi menunjukkan bahwa ARDL (p=10, q=1) lebih unggul dan lebih layak digunakan.
+
+
+
+```{r}
+par(mfrow=c(1,1))
+plot(test$X_t, test$Y_t, type="b", col="black", ylim=c(20, 40))
+
+lines(test$X_t, fore.koyck$forecasts,col="red")
+
+lines(test$X_t, fore.dlm$forecasts,col="blue")
+
+lines(test$X_t, fore.ardl$forecasts,col="green")
+
+legend("topleft",c("aktual", "koyck","DLM", "autoregressive"), lty=1, col=c("black","red","blue","orange","green"), cex=0.8)
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
