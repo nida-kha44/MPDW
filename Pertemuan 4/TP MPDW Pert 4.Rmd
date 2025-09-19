@@ -1,0 +1,686 @@
+---
+title: "TP MPDW Pert 5"
+author: "NIda Khairunnissa"
+date: "2025-09-19"
+output: html_document
+---
+
+
+# Kasus 1 - MA(2)
+
+## Pembangkitan Data
+### Manual
+```{r}
+set.seed(1061)
+n <- 300
+wn <- rnorm(n+2)   
+
+theta1 <- 0.4
+theta2 <- 0.6
+
+ma2_manual <- rep(NA, n)
+for(i in 3:302){
+   ma2_manual[i-2] <- wn[i] + theta1*wn[i-1] + theta2*wn[i-2]
+}
+ma2_manual
+
+```
+
+### Dengan Fungsi Arima.sim
+```{r}
+ma2_asim <- arima.sim(list(order=c(0,0,2), ma=c(0.4, 0.6)), n=300) # 3 parameter p utk ar, d utk i, q utk ma.
+ma2_asim
+```
+
+## Karakteristik MA(2)
+### Plot Time Series
+#### WN Manual
+```{r}
+ts.plot(ma2_manual, main = "Time Series MA(2) Manual", ylab = "Value", xlab = "Time")
+```
+
+Berdasarkan plot time series, terlihat bahwa data MA(2) yang dibangkitkan manual stasioner dalam rataan karena pola berfluktuasi di sekitar rata-rata nol.
+
+#### WN Arima.sim
+```{r}
+ts.plot(ma2_asim, main = "Time Series MA(2) Arima sim", ylab = "Value", xlab = "Time")
+```
+
+Berdasarkan plot time series, terlihat bahwa data MA(2) yang dibangkitkan dengan arima sim stasioner dalam rataan karena pola berfluktuasi di sekitar rata-rata nol.
+
+### Plot ACF
+#### WN Manual
+```{r}
+acf_manual <- acf(ma2_manual,lag.max = 20)
+```
+
+Berdasarkan plot ACF dari WN manual tersebut, terlihat bahwa plot ACF *cuts off* di lag kedua.
+
+#### WN Arima.sim
+```{r}
+acf_asim <- acf(ma2_asim,lag.max = 20)
+```
+
+Berdasarkan plot ACF dari WN dengan Arima.sim tersebut, terlihat bahwa plot ACF *cuts off* di lag kedua.
+
+### Plot PACF
+#### WN Manual
+```{r}
+
+pacf(ma2_manual, main = "PACF dari Data MA(2) Manual")
+```
+
+Berdasarkan plot PACF tersebut, terlihat bahwa plot PACF cenderung *tails off* dan membentuk gelombang sinusoidal.
+
+#### WN Arima.sim
+```{r}
+
+pacf(ma2_manual, main = "PACF dari Data MA(2) Arima.sim")
+```
+
+Berdasarkan plot PACF tersebut, terlihat bahwa plot PACF cenderung *tails off* dan membentuk gelombang sinusoidal.
+
+### Plot EACF
+#### WN Manual
+```{r}
+TSA::eacf(ma2_manual)
+```
+
+Berdasarkan pola segitiga nol pada plot EACF, terlihat bahwa segitiga nol berada pada ordo AR(0) dan ordo MA(2)
+
+#### WN Arima.sim
+```{r}
+TSA::eacf(ma2_asim)
+```
+
+Berdasarkan pola segitiga nol pada plot EACF, terlihat bahwa segitiga nol berada pada ordo AR(0) dan ordo MA(2)
+
+#### Kesimpulan
+Berdasarkan plot time series, ACF, dan PACF, data hasil simulasi (baik manual maupun dengan arima.sim) dapat dikatakan stasioner. Tidak terdapat indikasi tren atau perubahan varians, dan pola ACF/PACF sesuai dengan karakteristik proses MA(2).
+
+
+## Scatterplot Antar Lag
+### Korelasi antara $Y_t$ dengan $Y_{t-1}$
+#### WN Manual
+```{r}
+#Yt
+yt_ma <- ma2_manual[-1]
+yt_ma
+
+#Yt-1
+yt_1_ma <- ma2_manual[-300]
+yt_1_ma
+
+
+plot(y=yt_ma,x=yt_1_ma)
+cor(yt_ma,yt_1_ma)
+```
+#### WN Arima.sim
+```{r}
+#Yt
+yt_ma <- ma2_asim[-1]
+yt_ma
+
+#Yt-1
+yt_1_ma <- ma2_asim[-300]
+yt_1_ma
+
+
+plot(y=yt_ma,x=yt_1_ma)
+cor(yt_ma,yt_1_ma)
+```
+
+### Korelasi antara $Y_t$ dengan $Y_{t-2}$
+#### WN Manual
+
+```{r}
+#Yt
+yt_ma2 <- ma2_manual[-c(1,2)]
+yt_ma2
+#Yt-2
+yt_2_ma <- ma2_manual[-c(299,300)]
+yt_2_ma
+
+
+plot(y=yt_ma2,x=yt_2_ma)
+cor(yt_ma2,yt_2_ma)
+```
+#### WN Arima Sim
+
+```{r}
+#Yt
+yt_ma2 <- ma2_asim[-c(1,2)]
+yt_ma2
+#Yt-2
+yt_2_ma <- ma2_asim[-c(299,300)]
+yt_2_ma
+
+
+plot(y=yt_ma2,x=yt_2_ma)
+cor(yt_ma2,yt_2_ma)
+```
+
+### Korelasi antara $Y_t$ dengan $Y_{t-3}$
+#### WN Manual
+
+```{r}
+#Yt
+yt_ma3 <- ma2_manual[-c(1,2, 3)]
+yt_ma3
+#Yt-2
+yt_3_ma <- ma2_manual[-c(298,299,300)]
+yt_3_ma
+
+
+plot(y=yt_ma3,x=yt_3_ma)
+
+cor(yt_ma3,yt_3_ma)
+```
+
+#### WN Arima Sim
+
+```{r}
+#Yt
+yt_ma3 <- ma2_asim[-c(1,2,3)]
+yt_ma3
+#Yt-2
+yt_3_ma <- ma2_asim[-c(298,299,300)]
+yt_3_ma
+
+
+plot(y=yt_ma3,x=yt_3_ma)
+cor(yt_ma3,yt_3_ma)
+```
+
+## Nilai Autokorelasi
+### Dari Data Bangkitan
+#### WN Manual
+```{r}
+acf_manual <- acf(ma2_manual, lag.max = 10, plot = FALSE)
+acf_manual$acf
+```
+#### WN Arima.sim
+```{r}
+acf_asim <- acf(ma2_asim, lag.max = 10, plot = FALSE)
+acf_asim$acf
+```
+### Secara Teoritis
+#### WN Manual
+```{r}
+# Varians white noise
+sigma2 <- 1  
+
+# Autokovarians
+gamma0 <- sigma2 * (1 + theta1^2 + theta2^2)
+gamma1 <- sigma2 * (theta1 + theta1*theta2)
+gamma2 <- sigma2 * (theta2)
+
+# Autokorelasi teoritis
+rho0 <- gamma0 / gamma0
+rho1 <- gamma1 / gamma0
+rho2 <- gamma2 / gamma0
+rho_lain <- 0   # untuk lag > 2
+
+rho_teori <- c(rho0, rho1, rho2, rep(0, 7)) # sampai lag 9
+rho_teori
+
+```
+### Kesimpulan
+```{r}
+data.frame(
+  Lag = 0:9,
+  Empiris_Manual = round(acf_manual$acf[1:10], 3),
+  Empiris_ArimaSim = round(acf_asim$acf[1:10], 3),
+  Teoritis = round(rho_teori, 3)
+)
+
+```
+Berdasarkan hasil perhitungan, autokorelasi pada lag 0 bernilai 1 sesuai definisi. Pada lag 1 dan 2, nilai empiris (baik manual maupun arima.sim) menunjukkan autokorelasi positif yang mendekati nilai teoritis (ρ₁ ≈ 0.421 dan ρ₂ ≈ 0.395), sesuai karakteristik proses MA(2). Untuk lag lebih dari 2, secara teoritis autokorelasi bernilai nol, sementara hasil empiris masih menunjukkan fluktuasi kecil di sekitar nol akibat faktor acak dan keterbatasan jumlah sampel. Secara keseluruhan, data bangkitan konsisten dengan sifat teoritis MA(2).
+
+
+
+
+# Kasus 2 - AR(2)
+
+## Pembangkitan Data
+### Manual
+```{r}
+set.seed(1061)
+n <- 300
+wn <- rnorm(n, mean = 0, sd = 1)  
+
+phi1 <- 0.5
+phi2 <- 0.2
+
+ar2_manual <- numeric(n)
+ar2_manual[1:2] <- wn[1:2]
+
+for(i in 3:n){
+  ar2_manual[i] <- wn[i] + phi1*ar2_manual[i-1] + phi2*ar2_manual[i-2]
+}
+
+ar2_manual
+length(ar2_manual)
+
+```
+
+### WN Arima.sim
+```{r}
+set.seed(1061)
+ar2_asim <- arima.sim(list(order = c(2,0,0), ar = c(0.5, 0.2)), n = 300)
+ar2_asim
+length(ar2_asim)
+```
+
+## Karakteristik AR(2)
+### Plot Time Series
+#### WN Manual
+```{r}
+ts.plot(ar2_manual, main = "Plot Time Series AR (2)")
+```
+Berdasarkan plot time series tersebut terlihat bahwa data cenderung stasioner pada rataan
+#### WN Arima.sim
+```{r}
+ts.plot(ar2_asim)
+```
+Berdasarkan plot time series tersebut terlihat bahwa data cenderung stasioner pada rataan
+
+### Plot ACF
+#### WN Manual
+```{r}
+acf(ar2_manual)
+```
+Berdasarkan plot ACF tersebut terlihat bahwa plot ACF cenderung *tails off* dan cenderung membentuk pola grafik sinusodial
+
+#### WN Arima.sim
+```{r}
+acf(ar2_asim)
+```
+Berdasarkan plot ACF tersebut terlihat bahwa plot ACF cenderung *tails off* dan cenderung membentuk pola grafik sinusoidal
+
+### Plot PACF
+#### WN Manual
+```{r}
+pacf(ar2_manual)
+```
+Berdasarkan plot PACF tersebut, terlihat bahwa plot PACF *cuts off* pada lag kedua, sejalan dengan teori yang ada
+
+#### WN Arima.sim
+```{r}
+pacf(ar2_asim)
+```
+Berdasarkan plot PACF tersebut, terlihat bahwa plot PACF *cuts off* pada lag kedua
+
+### Plot EACF
+#### WN Manual
+```{r}
+TSA::eacf(ar2_manual)
+```
+Berdasarkan pola segitiga nol pada plot EACF, terlihat bahwa segitiga nol berada pada ordo AR(2) dan ordo MA(0).
+#### WN Arima.sim
+```{r}
+TSA::eacf(ar2_asim)
+```
+Berdasarkan pola segitiga nol pada plot EACF, terlihat bahwa segitiga nol berada pada ordo AR(2) dan ordo MA(0).
+
+### Kesimpulan
+Berdasarkan plot time series, ACF, dan PACF, data hasil simulasi (baik manual maupun dengan arima.sim) dapat dikatakan stasioner. Tidak terdapat indikasi tren atau perubahan varians, dan pola ACF/PACF sesuai dengan karakteristik proses AR(2).
+
+
+## Scatterplot Antar Lag
+### Korelasi antara $Y_t$ dengan $Y_{t-1}$
+#### WN Manual
+```{r}
+#Yt
+yt_ar <- ar2_manual[-1]
+yt_ar
+#Yt-1
+yt_1_ar <- ar2_manual[-300]
+yt_1_ar
+
+plot(y=yt_ar,x=yt_1_ar)
+cor(yt_ar,yt_1_ar)
+```
+#### WN Arima.sim
+```{r}
+#Yt
+yt_ar <- ar2_asim[-1]
+yt_ar
+#Yt-1
+yt_1_ar <- ar2_asim[-300]
+yt_1_ar
+
+plot(y=yt_ar,x=yt_1_ar)
+cor(yt_ar,yt_1_ar)
+```
+### Korelasi antara $Y_t$ dengan $Y_{t-2}$
+#### WN Manual
+```{r}
+#Yt
+yt_ar2 <- ar2_manual[-c(1,2)]
+yt_ar2
+#Yt-2
+yt_2_ar <- ar2_manual[-c(299,300)]
+yt_2_ar
+
+plot(y=yt_ar2,x=yt_2_ar)
+cor(yt_ar2,yt_2_ar)
+```
+#### WN Arima.sim
+```{r}
+#Yt
+yt_ar2 <- ar2_asim[-c(1,2)]
+yt_ar2
+#Yt-2
+yt_2_ar <- ar2_asim[-c(299,300)]
+yt_2_ar
+
+plot(y=yt_ar2,x=yt_2_ar)
+cor(yt_ar2,yt_2_ar)
+```
+
+### Korelasi antara $Y_t$ dengan $Y_{t-3}$
+#### WN Manual
+```{r}
+#Yt
+yt_ar3 <- ar2_manual[-c(1,2,3)]
+yt_ar3
+#Yt-2
+yt_3_ar <- ar2_manual[-c(298,299,300)]
+yt_3_ar
+
+plot(y=yt_ar3,x=yt_3_ar)
+cor(yt_ar3,yt_3_ar)
+```
+
+#### WN Arima.sim
+```{r}
+#Yt
+yt_ar3 <- ar2_asim[-c(1,2,3)]
+yt_ar3
+#Yt-2
+yt_3_ar <- ar2_asim[-c(298,299,300)]
+yt_3_ar
+
+plot(y=yt_ar3,x=yt_3_ar)
+cor(yt_ar3,yt_3_ar)
+```
+
+## Nilai Autokorelasi
+### Dari Data Bangkitan
+#### WN Manual
+```{r}
+acf_manual <- acf(ar2_manual, lag.max = 10, plot = FALSE)
+acf_manual$acf
+```
+#### WN Arima.sim
+```{r}
+acf_asim <- acf(ar2_asim, lag.max = 10, plot = FALSE)
+acf_asim$acf
+```
+### Secara Teoritis
+```{r}
+phi1 <- 0.5
+phi2 <- 0.2
+
+# rho0
+rho0 <- 1
+
+# rho1 (rumus Yule-Walker)
+rho1 <- phi1 / (1 - phi2)
+
+# rho2 (pakai persamaan Yule-Walker)
+rho2 <- (phi1 * rho1 + phi2 * rho0)
+
+# lanjutkan untuk lag berikutnya
+rho_teori <- numeric(11)  # sampai lag 10
+rho_teori[1] <- rho0
+rho_teori[2] <- rho1
+rho_teori[3] <- rho2
+
+for(k in 3:10){
+  rho_teori[k+1] <- phi1 * rho_teori[k] + phi2 * rho_teori[k-1]
+}
+
+rho_teori
+
+```
+### Perbandingan dan Kesimpulan
+```{r}
+data.frame(
+  Lag = 0:10,
+  Empiris_Manual = round(acf_manual$acf[1:11], 3),
+  Empiris_ArimaSim = round(acf_asim$acf[1:11], 3),
+  Teoritis = round(rho_teori, 3)
+)
+
+```
+Hasil perhitungan autokorelasi menunjukkan bahwa nilai autokorelasi empiris, baik dari data bangkitan manual maupun dengan fungsi arima.sim, relatif konsisten dan mendekati nilai teoritis yang dihitung berdasarkan model AR. Pola autokorelasi terlihat menurun seiring bertambahnya lag, sesuai karakteristik model AR(2) yang secara teoritis memang menghasilkan autokorelasi yang berangsur mengecil namun tetap positif. Perbedaan kecil antara nilai empiris dan teoritis dapat dijelaskan oleh adanya variasi acak dari proses simulasi.
+
+
+# Kasus 3 - ARMA(2,2)
+## Pembangkitan Data
+### WN Manual
+```{r}
+set.seed(1061)
+
+arma.sim <- function(n, macoef, arcoef){
+  manum <- length(macoef)
+  arnum <- length(arcoef)
+  stopifnot(manum < n & arnum < n)
+  
+  wn <- rnorm(n, sd = 0.5)   # white noise
+  init <- max(manum, arnum)
+
+  arma <- wn[1:init]         # inisialisasi awal
+  for(i in (init+1):n){
+    mastart <- i - manum
+    maend <- i-1
+    arstart <- i - arnum
+    arend <- i-1
+    arma[i] <- sum(arcoef * arma[arstart:arend]) + 
+               sum(macoef * wn[mastart:maend]) + 
+               wn[i]
+  }
+  return(arma)
+}
+
+phi <- c(0.5, 0.2)
+theta <- c(0.4, 0.6)
+n <- 300
+
+arma_manual <- arma.sim(n, macoef = theta, arcoef = phi)
+
+arma_manual
+length(arma_manual)
+```
+### WN Arima.sim
+```{r}
+arma_asim <- arima.sim(
+  model = list(ar = phi, ma = theta),
+  n = n,
+  sd = 0.5
+)
+
+arma_asim
+```
+
+## Karakteristik ARMA(2,2)
+### Plot Time Series
+#### WN Manual
+```{r}
+ts.plot(arma_manual, main = "Time Series ARMA(2,2) Manual", ylab = "Value", xlab = "Time")
+```
+
+#### WN Arima.sim
+```{r}
+ts.plot(arma_asim, main = "Time Series ARMA(2,2) Arima.sim", ylab = "Value", xlab = "Time")
+```
+
+### Plot ACF
+#### WN Manual
+```{r}
+acf(arma_manual)
+```
+#### WN Arima.sim
+```{r}
+acf(arma_asim)
+```
+Secara umum, kedua ACF menunjukkan karakteristik ARMA(2,2) yaitu autokorelasi yang menurun secara bertahap. Namun hasil manual cenderung memperlihatkan korelasi positif yang lebih panjang, sedangkan hasil arima.sim lebih cepat memotong dan menurun ke negatif pada lag tinggi.
+
+### Plot PACF
+#### WN Manual
+```{r}
+pacf(arma_manual)
+```
+#### WN Arima.sim
+```{r}
+pacf(arma_asim)
+```
+Berdasarkan  kedua plot PACF tersebut, terlihat bahwa model ARMA(2,2) hasil manual dan arima.sim memiliki plot PACF yang *tails off*, sesuai dengan teori
+
+### Plot EACF
+#### WN Manual
+```{r}
+TSA::eacf(arma_manual)
+```
+#### WN Arima.sim
+```{r}
+TSA::eacf(arma_asim)
+```
+Berdasarkan pola segitiga nol pada plot EACF kedua WN di atas, terlihat bahwa segitiga nol berada pada ordo AR(2) dan ordo MA(2)
+
+
+## Scatterplot Antar Lag
+### Korelasi antara $Y_t$ dengan $Y_{t-1}$
+#### WN Manual
+```{r}
+#Yt
+yt_ar <- arma_manual[-1]
+yt_ar
+#Yt-1
+yt_1_ar <- arma_manual[-300]
+yt_1_ar
+
+plot(y=yt_ar,x=yt_1_ar)
+cor(yt_ar,yt_1_ar)
+```
+#### WN Arima.sim
+```{r}
+#Yt
+yt_ar <- arma_asim[-1]
+yt_ar
+#Yt-1
+yt_1_ar <- arma_asim[-300]
+yt_1_ar
+
+plot(y=yt_ar,x=yt_1_ar)
+cor(yt_ar,yt_1_ar)
+```
+
+### Korelasi antara $Y_t$ dengan $Y_{t-2}$
+#### WN Manual
+```{r}
+#Yt
+yt_ar2 <- arma_manual[-c(1,2)]
+yt_ar2
+#Yt-2
+yt_2_ar <- arma_manual[-c(299,300)]
+yt_2_ar
+
+plot(y=yt_ar2,x=yt_2_ar)
+cor(yt_ar2,yt_2_ar)
+```
+#### WN Arima.sim
+```{r}
+#Yt
+yt_ar2 <- arma_asim[-c(1,2)]
+yt_ar2
+#Yt-2
+yt_2_ar <- arma_asim[-c(299,300)]
+yt_2_ar
+
+plot(y=yt_ar2,x=yt_2_ar)
+cor(yt_ar2,yt_2_ar)
+```
+
+### Korelasi antara $Y_t$ dengan $Y_{t-3}$
+#### WN Manual
+```{r}
+#Yt
+yt_ar3 <- arma_manual[-c(1,2,3)]
+yt_ar3
+#Yt-2
+yt_3_ar <- arma_manual[-c(298,299,300)]
+yt_3_ar
+
+plot(y=yt_ar3,x=yt_3_ar)
+cor(yt_ar3,yt_3_ar)
+```
+#### WN Arima.sim
+```{r}
+#Yt
+yt_ar3 <- arma_asim[-c(1,2,3)]
+yt_ar3
+#Yt-2
+yt_3_ar <- arma_asim[-c(298,299,300)]
+yt_3_ar
+
+plot(y=yt_ar3,x=yt_3_ar)
+cor(yt_ar3,yt_3_ar)
+```
+
+
+## Nilai Autokorelasi
+### Dari Data Bangkitan
+#### WN Manual
+```{r}
+acf_manual <- acf(arma_manual, lag.max = 10, plot = FALSE)$acf[,1,1]
+acf_manual
+```
+#### WN Arima.sim
+```{r}
+acf_asim <- acf(arma_asim, lag.max = 10, plot = FALSE)$acf[,1,1]
+acf_asim
+```
+### Secara Teoritis
+```{r}
+acf_hitung <- function(data, lag_maks){
+  n <- length(data)
+  rata2 <- mean(data)
+  penyebut <- sum((data - rata2)^2)   # variansi total
+  nilai_acf <- numeric(lag_maks + 1)
+  nilai_acf[1] <- 1   # rho_0 = 1
+  
+  for(k in 1:lag_maks){
+    pembilang <- sum((data[(k+1):n] - rata2) * (data[1:(n-k)] - rata2))
+    nilai_acf[k+1] <- pembilang / penyebut
+  }
+  
+  return(nilai_acf)
+}
+acf_manual <- acf_hitung(arma_manual, 10)
+acf_manual
+
+```
+
+
+### Perbandingan dan Kesimpulan
+```{r}
+# Hitung ACF manual (pakai fungsi buatan)
+acf_teoritis <- acf_hitung(arma_manual, 10)
+
+# Buat tabel perbandingan
+tabel_perbandingan <- data.frame(
+  Lag             = 0:10,
+  Empiris_Manual  = round(acf_manual, 3),
+  Empiris_ArimaSim= round(acf_asim, 3),
+  Manual_Rumus    = round(acf_teoritis, 3)
+)
+
+tabel_perbandingan
+
+```
+
+
+Hasil perhitungan autokorelasi pada model ARMA(2,2) menunjukkan bahwa nilai autokorelasi empiris dari data bangkitan manual dan hasil fungsi arima.sim relatif konsisten serta mendekati hasil perhitungan manual menggunakan rumus. Pola autokorelasi terlihat menurun secara bertahap seiring bertambahnya lag, yang sesuai dengan karakteristik proses ARMA dimana pengaruh nilai masa lalu berangsur melemah seiring waktu. Meskipun terdapat perbedaan kecil antara nilai empiris arima.sim dan hasil perhitungan manual, hal tersebut wajar terjadi karena adanya unsur acak pada proses pembangkitan data.
