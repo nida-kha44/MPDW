@@ -1,0 +1,311 @@
+---
+title: "TP MPDW Pert 5"
+author: "NIda Khairunnissa"
+date: "2025-09-27"
+output: html_document
+---
+
+
+# STUDI KASUS
+Ingin diketahui apakah data harga BTC stasioner dalam rataan dan stasioner dalam ragam atau tidak. Jika diketahui data tersebut tidak stasioner, maka akan dilakukan penanganan yang sesuai agar data tersebut menjadi stasioner dalam rataan dan ragam.
+
+## Library
+```{r}
+library(ggplot2)
+library(tsibble)
+library(tseries)
+library(MASS)
+library(rio)
+```
+
+## Input Data
+```{r}
+# Data BTC Price
+data <- import("https://raw.githubusercontent.com/nida-kha44/MPDW/refs/heads/main/Pertemuan%201/btc_historical_price.csv")
+head(data)
+
+# Pembagian Data BTC Price
+btcprice <- data[1655:2485, ]
+head(btcprice)
+
+# Ubah jadi time series
+btcprice.ts <- ts(btcprice$price, frequency = 1) 
+
+
+```
+
+## Eksplorasi Data BTC Price
+### Plot Time Series
+```{r}
+ts.plot(btcprice.ts, xlab="Time Period ", ylab="price", 
+        main = "Time Series Plot")
+points(btcprice.ts)
+
+```
+
+```{r}
+plot_btcprice <- btcprice.ts |> 
+  as_tsibble() |> 
+  ggplot(aes(x = index, y = value)) +
+  geom_line() +
+  theme_bw() +
+  xlab("Obs") + 
+  ylab("Nilai")
+
+plot_btcprice
+
+# Hitung rata-rata
+mean(btcprice.ts)
+```
+Plot deret waktu di atas menunjukkan bahwa data tidak stasioner dalam rataan, ditandai dengan adanya tren peningkatan tajam dari waktu ke waktu (harga semakin naik). Selain itu, data juga tidak stasioner dalam ragam, ditandai dengan fluktuasi (volatilitas) yang semakin besar seiring bertambahnya waktu.
+
+```{r}
+# Density plot
+lattice::densityplot(as.vector(btcprice.ts))
+```
+Density plot di atas menunjukkan bahwa data BTC Price tidak stasioner dalam rataan maupun ragam, terlihat dari distribusi yang sangat miring ke kanan dengan sebaran yang tidak merata.
+
+### Plot ACF
+```{r}
+acf(btcprice.ts)
+```
+
+Berdasarkan plot ACF, terlihat bahwa plot ACF pada data tersebut menurun secara perlahan (*tails off slowly*) yang menandakan data tidak stasioner dalam rataan
+
+### Uji ADF
+$H_0$ : Data tidak stasioner dalam rataan
+
+$H_1$ : Data stasioner dalam rataan
+```{r}
+adf.test(btcprice.ts)
+```
+Berdasarkan uji ADF tersebut, didapat *p-value* sebesar 0.99 yang lebih besar dari taraf nyata 5% dan menandakan bahwa data tidak stasioner dalam rataan. Hal ini tidak sesuai dengan hasil eksplorasi menggunakan plot time series dan plot ACF
+
+### Plot Box-Cox
+```{r}
+library(forecast)
+
+# Misal btcprice.ts sudah berupa objek ts
+# Cari nilai lambda terbaik
+lambda <- BoxCox.lambda(btcprice.ts)
+
+# Plot Box-Cox Transformation
+boxcox(btcprice.ts ~ 1, lambda = seq(-2, 2, 0.1))
+
+# Atau lebih praktis pakai fungsi dari forecast
+autoplot(BoxCox(btcprice.ts, lambda)) +
+  ggtitle(paste("Box-Cox Transformation (λ =", round(lambda, 3), ")"))
+
+```
+
+Meskipun nilai λ = 1 masih termasuk dalam interval 95%, λ optimum berada di sekitar -0.141. Artinya, data btcprice.ts tidak harus ditransformasi (cukup dipakai apa adanya), karena variansnya sudah cukup stabil dalam konteks Box-Cox.
+
+## Kesimpulan Ketidakstasioneran
+Berdasarkan hasil eksplorasi, data BTC Price terbukti tidak stasioner dalam rataan maupun ragam. Hal ini tampak dari plot time series yang menunjukkan tren kenaikan tajam dan fluktuasi (volatilitas) yang semakin besar, density plot yang sangat miring ke kanan, serta plot ACF yang menurun perlahan (tails off slowly). Hasil uji ADF juga mendukung temuan ini dengan p-value sebesar 0.99 (> 0.05), sehingga hipotesis nol bahwa data tidak stasioner dalam rataan tidak dapat ditolak. Sementara itu, hasil analisis Box-Cox menunjukkan bahwa λ optimum berada di sekitar -0.141, namun λ = 1 masih termasuk dalam interval 95%. Artinya, dari sisi ragam, data relatif sudah cukup stabil sehingga transformasi Box-Cox tidak mutlak diperlukan, tetapi dalam analisis ini akan tetap dilakukan transformasi log untuk menyederhanakan pola pertumbuhan eksponensial pada data.
+
+
+## Penanganan Ketidak Stasioneran
+### Penanganan Tidak Stasioner dalam Ragam
+```{r}
+# Transformasi log pada data btc price
+btcprice.log <- log(btcprice.ts)
+head(btcprice.log)
+
+# Tampilan plot time series data yang sudah ditramsformasi log
+ts.plot(btcprice.log, 
+        main = "Log Transformasi BTC Price", 
+        ylab = "log(price)", 
+        xlab = "Time Period")
+btcprice.log
+```
+
+### Penanganan Tidak Stasioner dalam Rataan
+```{r}
+# Differencing Orde 1
+btcprice.logdiff1 <- diff(btcprice.log, differences = 1)
+head(btcprice.logdiff1)
+
+# Tampilan plot time series data yang sudah di-Log dan di-Differencing
+ts.plot(btcprice.logdiff1, 
+        main = "Differencing Orde 1 pada Log BTC Price", 
+        ylab = "diff((price))", 
+        xlab = "Time Period")
+points(btcprice.logdiff1)
+```
+
+### Eksplorasi Data BTC Price yang sudah ditangani
+#### Plot Time Series
+```{r}
+plot_btcprice.logdiff1 <- btcprice.logdiff1 |> 
+  as_tsibble() |> 
+  ggplot(aes(x = index, y = value)) +
+  geom_line() +
+  theme_bw() +
+  xlab("Obs") + 
+  ylab("Nilai")
+
+plot_btcprice.logdiff1
+
+# Hitung rata-rata
+mean(btcprice.logdiff1)
+```
+
+Berdasarkan plot time series tersebut, terlihat bahwa data cenderung stasioner dalam rataan, ditandain dengan tidak adanya trend dan musiman pada data, serta stasioner dalam ragam, ditandai dengan lebar pita yang cenderung sama pada plot tersebut
+
+```{r}
+# Density plot
+lattice::densityplot(as.vector(btcprice.logdiff1))
+```
+Density plot di atas mengindikasikan bahwa data BTC Price stasioner dalam rataan maupun ragam, terlihat dari distribusi yang menyebar normal dengan sebaran yang cukup merata.
+
+#### Plot ACF
+```{r}
+acf(btcprice.logdiff1)
+```
+
+Berdasarkan plot ACF, terlihat bahwa data cenderung stasioner dalam ragam ditandai dengan plot ACF yang *cut off* pada lag pertama.
+
+#### Uji ADF
+$H_0$ : Data tidak stasioner dalam rataan
+
+$H_1$ : Data stasioner dalam rataan
+```{r}
+adf.test(btcprice.logdiff1)
+```
+Berdasarkan uji ADF tersebut, didapat *p-value* sebesar 0.01 yang lebih kecil dari taraf nyata 5% dan menandakan bahwa data stasioner dalam rataan. Hal ini sesuai dengan hasil eksplorasi menggunakan plot time series dan plot ACF
+
+
+## Pembuktian Kestasioneran pada Data dengan Partisi Data
+### Pembagian Data
+```{r}
+# Cek panjang data
+n <- length(btcprice.logdiff1)
+n
+# Tentukan titik pembagi (misal 60% - 40%)
+split_point <- floor(0.4 * n)
+```
+
+### Bagian 1
+```{r}
+btc_part1 <- btcprice.logdiff1[1:split_point] |> ts()
+length(btc_part1)
+mean(btc_part1); var(btc_part1)
+
+```
+#### Eksplorasi Data
+##### Plot Time Series
+```{r}
+btc_part1 |> as_tsibble() |> 
+  ggplot(aes(x = index, y = value)) +
+  geom_line() + theme_bw() +
+  xlab("Obs") + ylab("Nilai")
+```
+
+Berdasarkan plot time series tersebut, terlihat bahwa data cenderung stasioner dalam rataan, ditandain dengan tidak adanya trend dan musiman pada data, serta stasioner dalam ragam, ditandai dengan lebar pita yang cenderung sama pada plot tersebut
+
+##### Plot ACF
+
+```{r}
+acf(btc_part1)
+```
+
+Berdasarkan plot ACF, terlihat bahwa data cenderung stasioner dalam rataan ditandai dengan plot ACF yang *cut off* pada lag pertama.
+
+#### Uji ADF
+
+```{r}
+adf.test(btc_part1)
+```
+
+$H_0$ : Data tidak stasioner dalam rataan
+
+$H_1$ : Data stasioner dalam rataan
+
+Berdasarkan uji ADF tersebut, didapat *p-value* sebesar 0.01 yang kurang dari taraf nyata 5% dan menandakan bahwa data stasioner dalam rataan. Hal ini sesuai dengan hasil eksplorasi menggunakan plot time series dan plot ACF
+
+##### Plot Boxcox
+
+```{r}
+# Buat indeks berdasarkan panjang data
+index <- seq(1, length(btc_part1))
+
+# Uji BoxCox
+bc <- boxcox(btc_part1 + abs(min(btc_part1)) + 1 ~ index, 
+             lambda = seq(-2, 2, by = 0.1))
+
+# Ambil lambda terbaik
+lambda <- bc$x[which.max(bc$y)]
+lambda
+
+# Selang kepercayaan lambda
+bc$x[bc$y > max(bc$y) - 1/2 * qchisq(.95, 1)]
+
+```
+Hasil Box-Cox menunjukkan bahwa nilai λ = 1 masih termasuk dalam interval 95%. Artinya, data btc_part1 stasioner dalam ragam.
+
+
+### Bagian 2
+```{r}
+btc_part2 <- btcprice.logdiff1[(split_point+1):n] |> ts()
+length(btc_part2)
+mean(btc_part1); var(btc_part2)
+```
+#### Eksplorasi Data
+##### Plot Time Series
+```{r}
+btc_part2 |> as_tsibble() |> 
+  ggplot(aes(x = index, y = value)) +
+  geom_line() + theme_bw() +
+  xlab("Obs") + ylab("Nilai")
+```
+Berdasarkan plot time series tersebut, terlihat bahwa data cenderung stasioner dalam rataan, ditandain dengan tidak adanya trend dan musiman pada data, serta stasioner dalam ragam, ditandai dengan lebar pita yang cenderung sama pada plot tersebut
+
+##### Plot ACF
+
+```{r}
+acf(btc_part2)
+```
+
+Berdasarkan plot ACF, terlihat bahwa data cenderung stasioner dalam rataan ditandai dengan plot ACF yang *cut off* pada lag pertama.
+
+#### Uji ADF
+
+```{r}
+adf.test(btc_part2)
+```
+
+$H_0$ : Data tidak stasioner dalam rataan
+
+$H_1$ : Data stasioner dalam rataan
+
+Berdasarkan uji ADF tersebut, didapat *p-value* sebesar 0.01 yang kurang dari taraf nyata 5% dan menandakan bahwa data stasioner dalam rataan. Hal ini sesuai dengan hasil eksplorasi menggunakan plot time series dan plot ACF
+
+##### Plot Boxcox
+
+```{r}
+# Buat indeks berdasarkan panjang data
+index <- seq(1, length(btc_part2))
+
+# Uji BoxCox
+bc <- boxcox(btc_part2 + abs(min(btc_part2)) + 1 ~ index, 
+             lambda = seq(-2, 2, by = 0.1))
+
+# Ambil lambda terbaik
+lambda <- bc$x[which.max(bc$y)]
+lambda
+
+# Selang kepercayaan lambda
+bc$x[bc$y > max(bc$y) - 1/2 * qchisq(.95, 1)]
+
+```
+Hasil Box-Cox menunjukkan bahwa nilai λ = 1 masih termasuk dalam interval 95%. Artinya, data btc_part2 stasioner dalam ragam.
+
+
+
+
+
+
+
+
+
+
