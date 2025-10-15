@@ -1,0 +1,2212 @@
+---
+title: "MPDW"
+author: "NIda Khairunnissa"
+date: "2025-10-15"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+# PERTEMUAN 4
+
+
+
+## White Noise
+
+Pembangkitan data berpola AR, MA, ARMA, dan banyak proses deret waktu lainnya diawali pembangkitan *white noise*. *White noise* merupakan sederet nilai dari peubah bebas stokastik identik. Oleh karena itu, *white noise* memiliki dua karakteristik penting:
+
+1.  *White noise* tidak memiliki autokorelasi (**karena saling bebas**)
+2.  Nilai harapan dan ragam *white noise* sama (**karena berasal dari peubah acak bebas stokastik identik**)
+
+*White noise* dibangkitkan dari suatu peubah acak, umumnya peubah acak normal.
+
+```{r}
+set.seed(1234)
+wn <- rnorm(200)
+ts.plot(wn)
+```
+
+Dapat terlihat bahwa *white noise* tidak memiliki autokorelasi dari ACF. Perhatikan bahwa lag ke-0 adalah korelasi observasi ke-t dengan dirinya sendiri. Nilai korelasi tersebut pasti 1. Sebagai alternatif, lag pertama di plot ACF dapat ditetapkan sebagai 1 (alih-alih 0) dengan menambahkan argumen `xlim(1, lag akhir)`. Plot tersebut dapat disandingkan bersamaan dengan membuat matriks $1 \times 2$ dengan `par(mfrow = c(1,2))`.
+
+```{r}
+par(mfrow = c(1, 2)) 
+acf(wn)
+acf(wn, xlim = c(1, 20))
+```
+
+## Proses MA
+
+Proses MA dapat dituliskan sebagai berikut:
+
+$$
+y_{t} = c + e_t + \theta_{1}e_{t-1} + \theta_{2}e_{t-2} + \dots + \theta_{q}e_{t-q} = c+{e_t+\sum_{i=1}^p \theta_ie_{t-i}}
+$$ Terlihat bahwa $e_t$, atau *white noise*, berperan penting dalam pembangkitan proses MA.
+
+## Pembangkitan Proses MA(1)
+
+Akan dicoba membangkitkan proses MA paling sederhana, yaitu MA(1) dengan $\theta = 0.5$ sebanyak 200 observasi dan $c=0$. Karena diperlukan satu nilai awal untuk $e_{t-1}$, masukkan nilai pertama white noise sebagai nilai awal tersebut.
+
+```{r}
+set.seed(1234)
+ma <- wn[1]
+```
+
+Nilai-nilai selanjutnya dapat dicari melalui *loop*. Bentuk loop dapat dilihat dari rumus MA(1) yang hendak dibangkitkan:
+
+$$
+y_t = e_t+0.5e_{t-1}
+$$
+
+```{r}
+for(i in 2:200){
+   ma[i] <- wn[i] + 0.5 * wn[i - 1] 
+}
+ma
+```
+
+Selain menggunakan cara di atas, pembangkitan proses MA(1) dapat dilakukan dengan fungsi `arima.sim()` sebagai berikut.
+
+```{r}
+ma1 <- arima.sim(list(order=c(0,0,1), ma=0.5), n=200)
+ma1
+```
+
+## Karakteristik MA(1)
+
+### Plot Time Series
+
+```{r}
+ts.plot(ma)
+```
+
+Berdasarkan plot time series, terlihat bahwa data MA(1) yang dibangkitkan stasioner dalam rataan
+
+### Plot ACF
+
+```{r}
+acf(ma,lag.max = 20)
+```
+
+Berdasarkan plot AFC tersebut, terlihat bahwa plot ACF *cuts off* di lag pertama
+
+### Plot PACF
+
+```{r}
+pacf(ma)
+```
+
+Berdasarkan plot PACF tersebut, terlihat bahwa plot PACF cenderung *tails off* dan membentuk gelombang sinus
+
+### Plot EACF
+
+```{r}
+TSA::eacf(ma)
+```
+
+Berdasarkan pola segitiga nol pada plot EACF, terlihat bahwa segitiga nol berada pada ordo AR(0) dan ordo MA(1)
+
+### Scatterplot Antar Lag
+
+#### Korelasi antara $Y_t$ dengan $Y_{t-1}$
+
+```{r}
+#Yt
+yt_ma <- ma[-1]
+yt_ma
+#Yt-1
+yt_1_ma <- ma[-200]
+yt_1_ma
+```
+
+```{r}
+plot(y=yt_ma,x=yt_1_ma)
+```
+
+Berdasarkan scatterplot tersebut, terlihat bahwa terdapat hubungan positif antara $Y_t$ dengan $Y_{t-1}$. Hal ini sesuai dengan teori yang ada
+
+```{r}
+cor(yt_ma,yt_1_ma)
+```
+
+Korelasi antara $Y_t$ dengan $Y_{t-1}$ dari hasil simulasi mendekati perhitungan teoritis yaitu
+
+$$
+\rho_1=\frac{-\theta}{1+(-\theta)^2}=\frac{-(-0.5)}{1+(-0.5)^2}=0.4
+$$
+
+#### Korelasi antara $Y_t$ dengan $Y_{t-2}$
+
+```{r}
+#Yt
+yt_ma2 <- ma[-c(1,2)]
+yt_ma2
+#Yt-2
+yt_2_ma <- ma[-c(199,200)]
+yt_2_ma
+```
+
+```{r}
+plot(y=yt_ma2,x=yt_2_ma)
+```
+
+Berdasarkan scatterplot tersebut, terlihat bahwa cenderung tidak terdapat hubungan antara $Y_t$ dengan $Y_{t-2}$.
+
+```{r}
+cor(yt_ma2,yt_2_ma)
+```
+
+Korelasi antara $Y_t$ dengan $Y_{t-2}$ hasil simulasi mendekati teori yang ada yaitu 0.
+
+## Proses AR
+
+Proses AR dapat dituliskan sebagai berikut:
+
+$$ y_{t} = c + e_t + \phi_{1}Y_{t-1} + \phi_{2}Y_{t-2} + \dots + \phi_{q}Y_{t-q} = c+{e_t+\sum_{i=1}^p \phi_iY_{t-i}} $$ Terlihat bahwa $Y_t$ berperan penting dalam pembangkitan proses AR.
+
+## Pembangkitan Proses AR
+
+Akan dicoba membangkitkan proses AR paling sederhana, yaitu AR(1) dengan $\phi = 0.7$ sebanyak 200 observasi dan $c=0$.
+
+```{r}
+set.seed(1234)
+```
+
+Nilai-nilai selanjutnya dapat dicari melalui *loop*. Bentuk loop dapat dilihat dari rumus AR(1) yang hendak dibangkitkan:
+
+$$ Y_t = e_t+0.7Y_{t-1} $$
+
+```{r}
+n<-length(wn)
+n
+ar <- c(1:n) 
+for (i in 2:n) {ar[i]<-wn[i]+0.7*ar[i-1]}
+ar
+```
+
+Selain menggunakan cara di atas, pembangkitan proses AR dapat dilakukan dengan fungsi `arima.sim()` sebagai berikut.
+
+```{r}
+ar1 <- arima.sim(list(order=c(1,0,0), ar=0.7), n=200)
+ar1
+```
+
+## Karakteristik AR(1)
+
+### Plot Time Series
+
+```{r}
+ts.plot(ar)
+```
+
+Berdasarkan plot time series tersebut terlihat bahwa data cenderung stasioner pada rataan
+
+### Plot ACF
+
+```{r}
+acf(ar)
+```
+
+Berdasarkan plot ACF tersebut terlihat bahwa plot ACF cenderung *tails off* dan cenderung membentuk pola grafik sinus
+
+### Plot PACF
+
+```{r}
+pacf(ar)
+```
+
+Berdasarkan plot PACF tersebut, terlihat bahwa plot PACF *cuts off* pada lag pertama, sejalan dengan teori yang ada
+
+### Plot EACF
+
+```{r}
+TSA::eacf(ar)
+```
+
+Berdasarkan pola segitiga nol pada plot EACF, terlihat bahwa segitiga nol berada pada ordo AR(1) dan ordo MA(0)
+
+### Scatterplot Antar Lag
+
+#### Korelasi antara $Y_t$ dengan $Y_{t-1}$
+
+```{r}
+#Yt
+yt_ar <- ar[-1]
+yt_ar
+#Yt-1
+yt_1_ar <- ar[-200]
+yt_1_ar
+```
+
+```{r}
+plot(y=yt_ar,x=yt_1_ar)
+```
+
+Berdasarkan scatterplot tersebut, terlihat bahwa terdapat hubungan positif antara $Y_t$ dengan $Y_{t-1}$. Hal ini sesuai dengan teori yang ada
+
+```{r}
+cor(yt_ar,yt_1_ar)
+```
+
+Korelasi antara $Y_t$ dengan $Y_{t-1}$ dari hasil simulasi mendekati perhitungan teoritis yaitu $\rho_1=\phi^1=0.7$
+
+#### Korelasi antara $Y_t$ dengan $Y_{t-2}$
+
+```{r}
+#Yt
+yt_ar2 <- ar[-c(1,2)]
+yt_ar2
+#Yt-2
+yt_2_ar <- ar[-c(199,200)]
+yt_2_ar
+```
+
+```{r}
+plot(y=yt_ar2,x=yt_2_ar)
+```
+
+Berdasarkan scatterplot tersebut, terlihat bahwa terdapat hubungan positif antara $Y_t$ dengan $Y_{t-2}$. Hal ini sesuai dengan teori yang ada
+
+```{r}
+cor(yt_ar2,yt_2_ar)
+```
+
+Korelasi antara $Y_t$ dengan $Y_{t-2}$ dari hasil simulasi mendekati perhitungan teoritis yaitu $\rho_2=\phi^2=0.49$.
+
+## Fungsi pembangkitan ARMA
+
+Setelah mengetahui cara membangkitkan data berpola AR, MA, dan ARMA sederhana, bagaimana cara melakukan pembangkitan data berpola tersebut yang lebih kompleks? Apakah dapat dibuat suatu fungsi yang fleksibel yang memungkinan pembangkitan dengan berapapun jumlah koefisien?
+
+Pertama, lihat kembali bentuk umum data berpola ARMA.
+
+$$
+y_{t} = c + \sum_{i=1}^p \phi_{i}y_{t-i} + \sum_{j=1}^q e_{t-j}+ e_{t}
+$$
+
+Komponen $c$ dan $e_{t}$ cukup mudah untuk dibuat dan dicari. Bagaimana untuk komponen AR dan MA? Bayangkan ada koefisien dan data sebagai berikut:
+
+$$
+\begin{aligned}
+\begin{bmatrix}
+\phi_1 \  \phi_2 \ \phi_3
+\end{bmatrix}&=
+\begin{bmatrix}
+0.3 \ 0.5 \ 0.2
+\end{bmatrix}
+\\
+\begin{bmatrix}
+y_{t-1} \  y_{t-2} \ y_{t-3}
+\end{bmatrix}&=
+\begin{bmatrix}
+1 \ 2 \ 3
+\end{bmatrix}
+\end{aligned}
+$$
+
+Maka dari itu,
+
+$$
+\begin{aligned}
+\begin{bmatrix}
+\phi_1 \  \phi_2 \ \phi_3
+\end{bmatrix}
+\begin{bmatrix}
+y_{t-1} \\  y_{t-2} \\ y_{t-3}
+\end{bmatrix} &= \phi_1 \ y_{t-1}+\phi_2 \ y_{t-2}+\phi_3 \ y_{t-3}
+\\
+\begin{bmatrix}
+ 0.3 \ 0.5 \ 0.2
+\end{bmatrix}
+\begin{bmatrix}
+1 \\ 2 \\ 3
+\end{bmatrix} & = 0.3 \cdot1+0.5 \cdot 2+0.2 \cdot 3\\
+&=0.3+1+0.6 = 1.9
+\end{aligned}
+$$
+
+
+Jika koefisien dan *white noise*/nilai deret waktu sebelumnya dapat diekstrak dalam bentuk vektor, dapat dilakukan perkalian matriks untuk mencari nilai bagian AR dan MA:
+
+```{r}
+set.seed(30)
+coefs <- c(0.3, 0.5, 0.2)
+e <- c(1, 2, 3)
+
+coefs %*% e
+```
+
+Atau, dapat dilakukan perkalian *elementwise* yang dijumlahkan:
+
+```{r}
+coefs * e
+sum(coefs * e)
+```
+
+Dari prinsip ini, dapat dibuat fungsi umum untuk membangkitkan data ARMA. Input dari fungsi adalah jumlah data yang hendak dibangkitkan, koefisien MA, dan koefisien AR
+
+```{r}
+arma.sim <- function(n, macoef, arcoef){
+  manum <- length(macoef)
+  arnum <- length(arcoef)
+  stopifnot(manum < n & arnum < n)
+  
+  wn <- rnorm(n, sd = 0.5)
+  init <- max(manum, arnum)
+
+  arma <- wn[1:init]
+  for(i in {init+1}:n){
+   mastart <- i - manum
+   maend <- i-1
+   arstart <- i - arnum
+   arend <- i-1
+   arma[i] <- sum(arcoef * arma[arstart:arend]) + sum(macoef * wn[mastart:maend])  + wn[i]
+   }
+  return(arma)
+}
+```
+
+Terlihat bahwa komponen $\sum_{i=1}^q y_{t-1}$ disimulasikan melalui `sum(arcoef * arma[arstart:arend])`. Jadi, koefisien dikalikan dengan data $y$ dari $t-q$ di mana q adalah jumlah koefisien AR, sampai data $t-1$. Lalu komponen $\sum_{j=1}^q e_{t-j}$ disimulasikan melalui `sum(macoef * wn[mastart:maend])`. Koefisien dikalikan dengan *white noise* $e$ dari $t-p$, p jumlah koefisien MA, sampai $t-1$.
+
+```{r}
+# beberapa contoh pembangkitan melalui fungsi
+
+ma3 <- arma.sim(1000, c(0.4, 0.6,0.4), 0)
+ar2 <- arma.sim(1000, 0, c(0.3, 0.6))
+
+par(mfrow = c(2, 2))
+acf(ma3)
+pacf(ma3)
+acf(ar2)
+pacf(ar2)
+```
+
+```{r}
+#contoh untuk ARMA
+arma22 <- arma.sim(2000, c(0.3, 0.4), c(0.3,0.4))
+
+arma22 |> arima(c(2,0,2))
+```
+
+```{r}
+set.seed(1234)
+n = length(wn)
+phi1 = 0.7
+theta1 = 0.5
+
+y.arma=c(1:n)
+for (i in 2:n){y.arma[i] = phi1*y.arma[i-1] + theta1*wn[i-1]+wn[i]}
+y.arma
+```
+
+Pembangkitan ARMA(p,q) juga dapat dilakukan dengan fungsi `arima.sim` sebagai berikut.
+
+```{r}
+arma11 <- arima.sim(list(order=c(1,0,1), ar = 0.7, ma = 0.5), n=200)
+arma11
+```
+
+## Karakteristik ARMA(1,1)
+
+### Plot Time Series
+
+```{r}
+par(mfrow = c(1, 2))
+ts.plot(y.arma)
+ts.plot(arma11)
+par(mfrow = c(1, 1))
+```
+
+Berdasarkan plot time series tersebut, terlihat bahwa model ARMA(1,1) cenderung stasioner dalam rataan
+
+### Plot ACF
+
+```{r}
+par(mfrow = c(1, 2))
+acf(y.arma)
+acf(arma11)
+par(mfrow = c(1, 1))
+```
+
+Berdasarkan plot ACF tersebut, terlihat bahwa model ARMA(1,1) hasil simulasi memiliki plot ACF yang *tails off*, sesuai dengan teori yang ada
+
+### Plot PACF
+
+```{r}
+par(mfrow = c(1, 2))
+pacf(y.arma)
+pacf(arma11)
+par(mfrow = c(1, 1))
+```
+
+Berdasarkan plot PACF tersebut, terlihat bahwa model ARMA(1,1) hasil simulasi memiliki plot PACF yang *tails off*, sesuai dengan teori
+
+### Plot EACF
+
+```{r}
+TSA::eacf(y.arma)
+TSA::eacf(arma11)
+```
+
+Berdasarkan pola segitiga nol pada plot EACF, terlihat bahwa segitiga nol berada pada ordo AR(1) dan ordo MA(1)
+
+### Scatterplot Antar Lag
+
+#### Korelasi antara $Y_t$ dengan $Y_{t-1}$
+
+```{r}
+#Yt
+yt_arma <- arma11[-1]
+yt_arma
+#Yt-1
+yt_1_arma <- arma11[-200]
+yt_1_arma
+```
+
+```{r}
+plot(y=yt_arma,x=yt_1_arma)
+```
+
+Berdasarkan scatterplot tersebut, terlihat bahwa terdapat hubungan positif antara $Y_t$ dengan $Y_{t-1}$. Hal ini sesuai dengan teori yang ada
+
+```{r}
+cor(yt_arma,yt_1_arma)
+```
+
+Korelasi antara $Y_t$ dengan $Y_{t-1}$ dari hasil simulasi mendekati perhitungan teoritis. 
+$$
+\rho_k = \frac{(1-\theta \phi)(\phi-\theta)}{1-2\theta\phi+\theta^2}\phi^{k-1} \:untuk \:k\ge1
+$$
+
+$$
+\rho_1 = \frac{(1-((-0.5)(0.7)))(0.7-(-0.5))}{1-2(-0.5)(0.7)+(-0.5)^2}0.7^{1-1}=0,8307692 
+$$
+
+
+
+# PERTEMUAN 5
+
+
+```{r}
+library(ggplot2)
+library(tsibble)
+library(tseries)
+library(MASS)
+```
+
+## Stasioner dalam Rataan dan Ragam
+
+Pada dasarnya, pembangkitan data ARIMA akan menghasilkan data yang
+stasioner dalam rataan dan ragam karena akan mengikuti fungsi
+*default*-nya yang mengikuti pembangkitan bilangan acak normal dengan
+`mean=0` dan `ragam=1` .
+
+```{r}
+set.seed(8990)
+stas <- arima.sim(n=200, list(order=c(1,0,1),ar= 0.2, ma=0.2),mean=12)
+```
+
+### Plot *Time Series*
+
+```{r}
+plot_stas <- stas |> as_tsibble() |> 
+  ggplot(aes(x = index, y = value)) + geom_line() + theme_bw() +
+  xlab("Obs") + ylab("Nilai")
+plot_stas
+mean(stas)
+```
+
+```{r}
+lattice::densityplot(as.vector(stas))
+```
+
+Plot deret waktu di atas menunjukkan bahwa data stasioner dalam rataan,
+ditandai dengan data yang menyebar di sekitar nilai tengahnya (18) dan
+stasioner dalam ragam, ditandai dengan data berfluktuasi pada rentang
+yang relatif sama sepanjang waktu.
+
+### Plot ACF
+
+```{r}
+acf(stas)
+```
+
+Berdasarkan plot ACF, terlihat bahwa plot ACF pada data tersebut
+cenderung *tails off* dan membentuk gelombang sinus.
+
+### Uji ADF
+
+Uji ADF (Augmented Dickey–Fuller) adalah uji statistik yang digunakan
+untuk memeriksa apakah suatu deret waktu stasioner dalam rataan.
+
+```{r}
+tseries::adf.test(stas)
+```
+
+$H_0$ : Data tidak stasioner dalam rataan
+
+$H_1$ : Data stasioner dalam rataan
+
+Berdasarkan uji ADF tersebut, didapat *p-value* sebesar 0.01 yang lebih
+kecil dari taraf nyata 5% sehingga tolak $H_0$ dan menandakan bahwa data
+**stasioner dalam rataan**. Hal ini sesuai dengan hasil eksplorasi
+menggunakan plot time series dan plot ACF.
+
+### Plot Box-Cox
+
+```{r}
+index <- seq(1:200)
+
+# Box-Cox
+bc <- boxcox(
+  stas ~ index,
+  lambda = seq(-1, 4, by = 0.01)
+)
+
+# Nilai lambda optimum
+lambda <- bc$x[which.max(bc$y)]
+lambda
+
+# Selang kepercayaan 95% untuk lambda
+ci_lambda <- bc$x[bc$y > max(bc$y) - 0.5 * qchisq(0.95, 1)]
+
+# Batas bawah dan batas atas
+ci_lower <- min(ci_lambda)
+ci_upper <- max(ci_lambda)
+
+c(Batas_Bawah = ci_lower, Batas_Atas = ci_upper)
+
+```
+
+Gambar di atas menunjukkan nilai λ optimum (rounded value) sebesar
+**1,97** dan selang kepercayaan 95% nilai memiliki batas bawah **0,22**
+dan batas atas **3,73**. Selang tersebut memuat nilai satu sehingga
+dapat dikatakan bahwa data bangkitan **stasioner dalam ragam**.
+
+> **Catatan:**\
+> Fungsi `boxcox()` di R tidak dapat digunakan langsung pada data yang
+> mengandung nilai nol atau negatif, meskipun hanya untuk tujuan
+> estimasi λ. Hal ini karena perhitungan log-likelihood dalam Box–Cox
+> mensyaratkan seluruh data bernilai positif.Jika dataset mengandung
+> nilai nol atau negatif, maka perlu ditambahkan suatu konstanta positif
+> pada seluruh data sehingga semua nilainya menjadi positif sebelum
+> dilakukan analisis Box–Cox.
+
+### Partisi Data Deret Waktu
+
+```{r}
+library(ggplot2)
+library(tsibble)
+
+plot_stas <- stas |> 
+  as_tsibble() |> 
+  ggplot(aes(x = index, y = value)) +
+  geom_line() +
+  theme_bw() +
+  xlab("Obs") + 
+  ylab("Nilai") +
+  
+  # Tambahkan garis batas
+  geom_vline(xintercept = 64, linetype = "dashed", color = "red") +
+  geom_vline(xintercept = 134, linetype = "dashed", color = "blue") +
+  ggtitle("Partisi Deret Waktu:")
+
+plot_stas
+
+
+```
+
+### Bagian 1 : observasi 1 - 64
+
+```{r}
+dt_stas1 <- stas[1:67] |> ts()
+
+#rata-rata
+mean(dt_stas1)
+
+#varians
+var(dt_stas1)
+```
+
+#### Plot Time Series
+
+```{r}
+dt_stas1 |> as_tsibble() |> 
+  ggplot(aes(x = index, y = value)) +
+  geom_line() + theme_bw() +
+  xlab("Obs") + ylab("Nilai")
+```
+
+Plot deret waktu di atas menunjukkan bahwa data stasioner dalam rataan,
+ditandai dengan data yang menyebar di sekitar nilai tengahnya (18) dan
+stasioner dalam ragam, ditandai dengan data berfluktuasi pada rentang
+yang relatif sama sepanjang waktu.
+
+#### Plot ACF
+
+```{r}
+acf(dt_stas1)
+```
+
+Berdasarkan plot ACF, terlihat bahwa plot ACF pada data tersebut
+cenderung *tails off* dan membentuk gelombang sinus.
+
+#### Uji ADF
+
+```{r}
+tseries::adf.test(dt_stas1)
+```
+
+$H_0$ : Data tidak stasioner dalam rataan
+
+$H_1$ : Data stasioner dalam rataan
+
+Berdasarkan uji ADF tersebut, didapat *p-value* sebesar 0.043 yang lebih
+kecil dari taraf nyata 5% sehingga tolak $H_0$ dan menandakan bahwa data
+**stasioner dalam rataan**. Hal ini sesuai dengan hasil eksplorasi
+menggunakan plot time series dan plot ACF.
+
+#### Plot Boxcox
+
+```{r}
+index <- seq(1, 67)
+
+# Box-Cox
+bc <- boxcox(
+  dt_stas1 ~ index,
+  lambda = seq(-2, 6, by = 0.01)
+)
+
+# Nilai lambda optimum (dibulatkan)
+lambda <- bc$x[which.max(bc$y)]
+lambda
+
+# Selang kepercayaan 95% untuk lambda
+ci_lambda <- bc$x[bc$y > max(bc$y) - 0.5 * qchisq(0.95, 1)]
+
+# Batas bawah dan batas atas
+ci_lower <- min(ci_lambda)
+ci_upper <- max(ci_lambda)
+
+c(Batas_Bawah = ci_lower, Batas_Atas = ci_upper)
+
+```
+
+Gambar di atas menunjukkan nilai *rounded value* ($\lambda$) optimum
+sebesar **2,2** dan pada selang kepercayaan 95% nilai memiliki batas
+bawah **-1,03** dan batas atas **5,57**. Selang tersebut memuat nilai
+satu sehingga dapat dikatakan bahwa data bangkitan stasioner dalam
+ragam.
+
+### Bagian 2 : observasi 1 - 134
+
+```{r}
+dt_stas2 <- stas[1:134] |> ts()
+mean(dt_stas2)
+var(dt_stas2)
+```
+
+#### Plot Time Series
+
+```{r}
+dt_stas2 |> as_tsibble() |> 
+  ggplot(aes(x = index, y = value)) +
+  geom_line() + theme_bw() +
+  xlab("Obs") + ylab("Nilai")
+```
+
+Plot deret waktu di atas menunjukkan bahwa data stasioner dalam rataan,
+ditandai dengan data yang menyebar di sekitar nilai tengahnya (18) dan
+stasioner dalam ragam, ditandai dengan data berfluktuasi pada rentang
+yang relatif sama sepanjang waktu.
+
+#### Plot ACF
+
+```{r}
+acf(dt_stas2)
+```
+
+Berdasarkan plot ACF, terlihat bahwa plot ACF pada data tersebut cut off
+
+#### Uji ADF
+
+```{r}
+adf.test(dt_stas2)
+```
+
+$H_0$ : Data tidak stasioner dalam rataan
+
+$H_1$ : Data stasioner dalam rataan
+
+Berdasarkan uji ADF tersebut, didapat *p-value* sebesar 0.01 yang lebih
+kecil dari taraf nyata 5% sehingga tolak $H_0$ dan menandakan bahwa
+**data stasioner dalam rataan**. Hal ini sesuai dengan hasil eksplorasi
+menggunakan plot time series dan plot ACF.
+
+#### Plot Boxcox
+
+```{r}
+index <- seq(1, 134)
+
+# Box-Cox
+bc <- boxcox(
+  dt_stas2 ~ index,
+  lambda = seq(0, 6, by = 0.01)
+)
+
+# Nilai lambda optimum
+lambda <- bc$x[which.max(bc$y)]
+lambda
+
+# Selang kepercayaan 95% untuk lambda
+ci_lambda <- bc$x[bc$y > max(bc$y) - 0.5 * qchisq(0.95, 1)]
+
+# Batas bawah dan batas atas
+ci_lower <- min(ci_lambda)
+ci_upper <- max(ci_lambda)
+
+c(Batas_Bawah = ci_lower, Batas_Atas = ci_upper)
+```
+
+Gambar di atas menunjukkan nilai *rounded value* ($\lambda$) optimum
+sebesar **2,85** dan pada selang kepercayaan 95% nilai memiliki batas
+bawah **0,47** dan batas atas **5,27**. Selang tersebut memuat nilai
+satu sehingga dapat dikatakan bahwa data bangkitan **stasioner dalam
+ragam**.
+
+## Tidak Stasioner dalam Rataan, Stasioner dalam Ragam
+
+Bagaimana cara mensimulasikan data dengan tren tertentu?
+
+Kunci dari simulasi tersebut berada di $Y_{t}-Y_{t-1}$, atau *first
+difference*, atau selisih antara observasi di waktu ke $t$ dan observasi
+sebelumnya. Jika suatu deret waktu memiliki tren naik, misal, maka
+selisih tersebut akan positif. Sebaliknya, jika suatu deret memiliki
+tren turun, maka selisih akan negatif. Jika suatu deret stasioner,
+selisih akan memiliki rata-rata nol.
+
+Ini dapat diilustrasikan dengan fungsi `cumsum`. `cumsum` adalah jumlah
+kumulatif. Untuk mengerti logika dari pengunaan jumlah kumulatif,
+bayangkan ada deret waktu dengan nilai awal $c$:
+
+$$
+Y_1 = c
+$$
+Lalu definsikan $d_i$, di mana $i = 2, 3, \ldots$ sebagai selisih
+observasi ke-i dengan observasi sebelumnya:
+
+$$
+d_i = Y_i-Y_{i-1}
+$$
+
+Perhatikan bahwa:
+
+$$
+\begin{aligned}
+Y_3-Y_{1} & = d_3+d_2\\
+&= Y_3-Y_2+Y_2-Y_1
+\end{aligned}
+$$
+
+Cukup jelas bahwa sifat tersebut berarti:
+
+$$
+\begin{aligned}
+Y_t-Y_1 &= \sum_{i=2}^t d_i\\
+Y_t &= Y_1 + \sum_{i=2}^t d_i
+\end{aligned}
+$$
+
+Atau, amatan di waktu ke $t$ dapat ditemukan dari menambahkan amatan
+ke-1 dengan jumlah kumulatif perbedaan $d_i$ sampai di waktu ke-t. Kode
+di bawah membuat data dengan proses tersebut. Ada tiga skenario, yaitu:
+
+1.  Selisih antara observasi dan observasi sebelumnya nol
+
+2.  Selisih antara observasi dan observasi sebelumnya positif
+
+3.  Selisih antara observasi dan observasi sebelumnya negatif
+
+Dengan nilai awal 1 dan komponen $e_t$ menyebar normal.
+
+```{r}
+# Simulasi deret waktu dengan tren berbeda
+# Tanpa tren
+notrend <- 1 + cumsum(rep(0, 100)) + rnorm(100) |> ts()
+
+# Tren naik
+postrend <- 1 + cumsum(rep(0.2, 100)) + rnorm(100) |> ts() 
+
+# Tren turun
+negtrend <- 1 + cumsum(rep(-0.2, 100)) + rnorm(100) |> ts()
+```
+
+Hasil yang muncul dapat di-plot (note, untuk plotting ini digunakan
+`ggplot2`; `ts.plot()` dapat digunakan - ini tergantung preferensi
+saja):
+
+```{r}
+plot_notrend <- notrend |> as_tsibble() |> 
+  ggplot(aes(x = index, y = value)) + geom_line() + theme_bw() +
+  xlab("Obs") + ylab("Nilai") + ggtitle("First Difference = 0")
+plot_postrend <- postrend |> as_tsibble() |> 
+  ggplot(aes(x = index, y = value)) + geom_line() + theme_bw() +
+  xlab("Obs") + ylab("Nilai") + ggtitle("First Difference = 0.2")
+plot_negtrend <- negtrend |> as_tsibble() |> 
+  ggplot(aes(x = index, y = value)) + geom_line() + theme_bw() +
+  xlab("Obs") + ylab("Nilai") + ggtitle("First Difference = -0.2")
+
+ggpubr::ggarrange(plot_notrend, plot_postrend, plot_negtrend, nrow = 3)
+```
+
+Dapat disimulasikan proses MA atau AR yang tidak stasioner dengan suatu
+tren dengan mensimulasikan beda terlebih dahulu (menggunakan
+`arima.sim`), ditambah suatu konstanta, lalu mencari jumlah kumulatif.
+Terdapat juga parameter `mean` di fungsi `arima.sim`, tetapi parameter
+ini adalah parameter untuk $E[e_t]$, bukan $E[Y_t-Y_{t-1}]$. Proses dari
+nilai harapan *rg2 noise* tertentu menjadi nilai harapan $Y$ di suatu
+proses MA atau AR yang tak stasioner sangat tergantung pada model, yang
+diilustrasikan
+[disini](https://stats.stackexchange.com/questions/294748/arima-sim-again-what-does-the-mean-parameter-do-in-an-ma1-sim/).
+
+```{r}
+startSpot <- 3
+
+# Cara 1: tambah konstanta 1.5 di selisih
+dt <- ts(arima.sim(n = 100,
+                   list(order = c(1,0,1), ar = 0.2, ma = 0.2),
+                   sd = 2) + 1.5)
+yt <- ts(startSpot + cumsum(dt))
+
+# Cara 2: gunakan mean = 1.5 di arima.sim
+dt_alt <- ts(arima.sim(n = 100,
+                       list(order = c(1,0,1), ar = 0.2, ma = 0.2),
+                       mean = 1.5, sd = 2))
+yt_alt <- ts(startSpot + cumsum(dt_alt))
+
+# Plot hasil simulasi
+plot_dt <- dt |> as_tsibble() |> 
+  ggplot(aes(x = index, y = value)) + geom_line() + theme_bw() +
+  xlab("Obs") + ylab("Nilai") + ggtitle("Penambahan konstanta 1.5 di selisih")
+plot_yt <- yt |> as_tsibble() |> 
+  ggplot(aes(x = index, y = value)) + geom_line() + theme_bw() +
+  xlab("Obs") + ylab("Nilai")
+plot_dt_alt <- dt_alt |> as_tsibble() |> 
+  ggplot(aes(x = index, y = value)) + geom_line() + theme_bw() +
+  xlab("Obs") + ylab("Nilai") + ggtitle("Mean 1.5 di parameter arima.sim")
+plot_yt_alt <- yt_alt |> as_tsibble() |> 
+  ggplot(aes(x = index, y = value)) + geom_line() + theme_bw() +
+  xlab("Obs") + ylab("Nilai")
+
+# Gabungkan Plot
+ggpubr::ggarrange(plot_dt, plot_yt, plot_dt_alt, plot_yt_alt)
+```
+
+Terlihat di contoh di atas bahwa menambahkan konstanta 1.5 pada hasil
+`arima.sim` beda dengan memasukkan parameter `mean = 1.5`.
+
+### Data Bangkitan Baru
+
+```{r}
+set.seed(8990)
+dt_alt <- arima.sim(n=200, list(order=c(1,0,1),ar=c(.2), ma=.2), mean=0.2, sd=0.5)  |> ts()
+postrend <- startSpot + cumsum(dt_alt) |> ts()
+```
+
+### Plot Time Series
+
+```{r}
+postrend |> as_tsibble() |> 
+  ggplot(aes(x = index, y = value)) +
+  geom_line() + theme_bw() +
+  xlab("Obs") + ylab("Nilai")
+mean(postrend)
+var(postrend)
+```
+
+Berdasarkan plot time series tersebut, terlihat bahwa data tidak
+stasioner dalam rataan, ditandai dengan adanya kecenderungan (tren)
+positif, tetapi stasioner dalam ragam, ditandai dengan adanya lebar pita
+pada plot yang cenderung sama.
+
+```{r}
+acf(postrend)
+```
+
+Plot ACF `postrend` menunjukkan korelasi yang menurun secara perlahan
+pada banyak lag, sehingga menjadi indikasi kuat bahwa deret tidak
+stasioner.
+
+### Uji ADF
+
+```{r}
+tseries::adf.test(postrend)
+```
+
+Berdasarkan uji ADF tersebut, didapat *p-value* lebih besar dari taraf
+nyata 5% sehingga gagal tolak $H_0$ dan menandakan bahwa **data tidak
+stasioner dalam rataan**. Hal ini sesuai dengan hasil eksplorasi
+menggunakan plot time series dan plot ACF.
+
+### Plot Box-Cox
+
+```{r}
+index <- seq(1, 200)
+
+# Uji Box-Cox
+bc <- boxcox(
+  postrend ~ index,
+  lambda = seq(0.8, 1.1, by = 0.001)
+)
+
+# Nilai lambda optimum
+lambda <- bc$x[which.max(bc$y)]
+lambda
+
+# Selang kepercayaan 95% untuk lambda
+ci_lambda <- bc$x[bc$y > max(bc$y) - 0.5 * qchisq(0.95, 1)]
+
+# Batas bawah dan batas atas
+ci_lower <- min(ci_lambda)
+ci_upper <- max(ci_lambda)
+
+c(Batas_Bawah = ci_lower, Batas_Atas = ci_upper)
+
+```
+
+### Differencing
+
+Dalam analisis deret waktu, differencing merupakan salah satu prosedur
+transformasi yang digunakan untuk memperoleh sifat stasioneritas dalam
+rataan. Metode ini dilakukan dengan menghitung selisih nilai observasi
+antar periode sehingga pola tren atau ketidakstasioneran dalam rataan
+dapat dieliminasi.
+
+Secara umum, pembedaan pertama ditulis sebagai:
+
+$$
+\nabla Y_t = Y_t - Y_{t-1}
+$$
+
+Jika tren linier masih tersisa/ belum stasioner, dapat dilakukan
+differencing kedua:\
+$$
+\nabla^2 Y_t = \nabla (\nabla Y_t) = Y_t - 2Y_{t-1} + Y_{t-2}
+$$
+
+Dengan cara ini, data yang awalnya tidak stasioner dapat ditransformasi
+menjadi stasioner sehingga bisa digunakan dalam pemodelan. Di dalam
+**R**, proses differencing dapat dilakukan dengan fungsi:
+
+-   `diff(y, differences = 1)` → untuk differencing pertama.
+-   `diff(y, differences = 2)` → untuk differencing kedua.
+
+```{r}
+# Differencing pertama pada postrend
+postrend_diff1 <- diff(postrend, differences = 1)
+
+# Plot hasil differencing
+ts.plot(postrend_diff1,
+        main = "First-order Differencing dari postrend",
+        col = "blue", lwd = 2)
+
+```
+
+### Plot ACF
+
+```{r}
+acf(postrend_diff1)
+```
+
+### Uji ADF
+
+```{r}
+adf.test(postrend_diff1)
+```
+
+Berdasarkan uji ADF tersebut, didapat *p-value* sebesar 0.01 yang lebih
+kecil dari taraf nyata 5% sehingga tolak $H_0$ dan menandakan bahwa
+**data sudah stasioner dalam rataan**. Hal ini sesuai dengan hasil
+eksplorasi menggunakan plot time series dan plot ACF.
+
+### Partisi Data
+
+```{r}
+postrend |> 
+  as_tsibble() |> 
+  ggplot(aes(x = index, y = value)) +
+  geom_line() +
+  geom_vline(xintercept = 100, linetype = "dashed", color = "red") +
+  theme_bw()
+```
+
+#### Bagian 1 : observasi 1 - 100
+
+```{r}
+postrend1 <- postrend[1:100] |> ts()
+mean(postrend1)
+var(postrend1)
+```
+
+#### Plot Time Series
+
+```{r}
+postrend1 |> as_tsibble() |> 
+  ggplot(aes(x = index, y = value)) +
+  geom_line()+theme_bw() +
+  xlab("Obs") + ylab("Nilai")
+```
+
+#### Plot ACF
+
+```{r}
+acf(postrend1)
+```
+
+#### Uji ADF
+
+```{r}
+adf.test(postrend1)
+```
+
+#### Plot Boxcox
+
+```{r}
+index <- seq(1:100)
+
+# Uji Box-Cox
+bc <- boxcox(
+  postrend1 ~ index,
+  lambda = seq(0.5, 1, by = 0.001)
+)
+
+# Nilai lambda optimum (dibulatkan)
+lambda <- bc$x[which.max(bc$y)]
+lambda
+
+# Selang kepercayaan 95% untuk lambda
+ci_lambda <- bc$x[bc$y > max(bc$y) - 0.5 * qchisq(0.95, 1)]
+
+# Batas bawah dan batas atas
+ci_lower <- min(ci_lambda)
+ci_upper <- max(ci_lambda)
+
+c(Batas_Bawah = ci_lower, Batas_Atas = ci_upper)
+```
+
+## Tidak Stasioner dalam Ragam, Stasioner dalam Rataan
+
+`arima.sim` memiliki parameter sd yang dapat di-set beda.
+
+```{r}
+set.seed(8090)
+sd1 <- arima.sim(n=80, list(order=c(1,0,1),ar=c(.2), ma=.2), sd = 1)
+sd5 <- arima.sim(n=120, list(order=c(1,0,1),ar=c(.2), ma=.2), sd = 5)
+dtgab <- c(sd1,sd5) |> ts()
+```
+
+### Plot Time Series
+
+```{r}
+dtgab |> as_tsibble() |> 
+  ggplot(aes(x = index, y = value)) +
+  geom_line() + theme_bw() +
+  xlab("Obs") + ylab("Nilai")
+```
+
+Berdasarkan plot deret waktu, data terlihat stasioner dalam rataan
+karena tidak menunjukkan adanya tren maupun pola musiman. Namun, data
+belum stasioner dalam ragam, yang ditunjukkan oleh adanya perbedaan
+besar-kecilnya fluktuasi pada plot.
+
+### Plot ACF
+
+```{r}
+acf(dtgab)
+```
+
+Berdasarkan plot ACF, terlihat bahwa data stasioner dalam rataan.
+
+### Uji ADF
+
+```{r}
+adf.test(dtgab)
+```
+
+$H_0$ : Data tidak stasioner dalam rataan
+
+$H_1$ : Data stasioner dalam rataan
+
+Berdasarkan uji ADF tersebut, didapat *p-value* sebesar 0.01 yang kurang
+dari taraf nyata 5% dan menandakan bahwa data **stasioner dalam
+rataan**. Hal ini sesuai dengan hasil eksplorasi menggunakan plot time
+series dan plot ACF.
+
+### Plot Box Cox
+
+```{r}
+index <- seq(1:200)
+
+# Uji Box-Cox
+bc <- boxcox(
+  dtgab - min(dtgab) + 1 ~ index,
+  lambda = seq(0, 5, by = 0.001)
+)
+
+# Nilai lambda optimum (dibulatkan)
+lambda <- bc$x[which.max(bc$y)]
+lambda
+
+# Selang kepercayaan 95% untuk lambda
+ci_lambda <- bc$x[bc$y > max(bc$y) - 0.5 * qchisq(0.95, 1)]
+
+# Batas bawah dan batas atas
+ci_lower <- min(ci_lambda)
+ci_upper <- max(ci_lambda)
+
+c(Batas_Bawah = ci_lower, Batas_Atas = ci_upper)
+```
+
+Hasil uji Box–Cox menunjukkan bahwa nilai λ optimum adalah 0,679 dengan
+interval kepercayaan 95% sebesar (0,479–0,890). Karena selang tersebut
+tidak memuat nilai λ = 1, maka dapat disimpulkan bahwa data tidak
+stasioner dalam ragam sehingga diperlukan transformasi.
+
+### Transformasi Box–Cox
+
+Transformasi Box–Cox atau transformasi pangkat digunakan untuk menangani
+deret yang tidak stasioner dalam ragam.
+
+::: {style="text-align: center;"}
+![](images/clipboard-1378671002.png){width="48%"}
+:::
+
+> ***Catatan:***\
+> Transformasi pangkat hanya dapat diterapkan pada data yang **bernilai
+> positif**.\
+> Apabila terdapat nilai nol atau negatif, maka suatu konstanta positif
+> perlu ditambahkan pada seluruh data agar semuanya bernilai positif
+> sebelum dilakukan transformasi.
+
+```{r}
+# Data digeser agar positif
+y_shift <- dtgab - min(dtgab) + 1
+
+# Transformasi Box-Cox dengan lambda ~ 0.5 (akar kuadrat)
+y_bc <- y_shift^0.5
+```
+
+```{r}
+index <- seq(1:200)
+
+# Uji Box-Cox
+bc <- boxcox(
+  y_bc ~ index,
+  lambda = seq(0, 5, by = 0.001)
+)
+
+# Nilai lambda optimum (dibulatkan)
+lambda <- bc$x[which.max(bc$y)]
+lambda
+
+# Selang kepercayaan 95% untuk lambda
+ci_lambda <- bc$x[bc$y > max(bc$y) - 0.5 * qchisq(0.95, 1)]
+
+# Batas bawah dan batas atas
+ci_lower <- min(ci_lambda)
+ci_upper <- max(ci_lambda)
+
+c(Batas_Bawah = ci_lower, Batas_Atas = ci_upper)
+```
+
+### Partisi Data
+
+#### Bagian 1 :
+
+```{r}
+dtgab1 <- dtgab[80:200] |> ts()
+mean(dtgab1)
+var(dtgab1)
+```
+
+#### Plot Time Series
+
+```{r}
+dtgab1 |> as_tsibble() |> 
+  ggplot(aes(x = index, y = value)) +
+  geom_line() + theme_bw() +
+  xlab("Obs") + ylab("Nilai")
+```
+
+Berdasarkan plot time series tersebut, terlihat bahwa data cenderung
+stasioner dalam rataan, ditandain dengan tidak adanya trend dan musiman
+pada data, serta stasioner dalam ragam, ditandai dengan lebar pita yang
+cenderung sama pada plot tersebut
+
+#### Plot ACF
+
+```{r}
+acf(dtgab1)
+```
+
+Berdasarkan plot ACF, terlihat bahwa data cenderung stasioner dalam
+rataan ditandai dengan plot ACF yang *tails off* dan cenderung membentuk
+gelombang sinus
+
+#### Uji ADF
+
+```{r}
+adf.test(dtgab1)
+```
+
+$H_0$ : Data tidak stasioner dalam rataan
+
+$H_1$ : Data stasioner dalam rataan
+
+Berdasarkan uji ADF tersebut, didapat *p-value* sebesar 0.01691 yang
+kurang dari taraf nyata 5% dan menandakan bahwa data stasioner dalam
+rataan. Hal ini sesuai dengan hasil eksplorasi menggunakan plot time
+series dan plot ACF
+
+#### Plot Boxcox
+
+```{r}
+index <- seq(80:200)
+bc = boxcox(dtgab1+25~index, lambda = seq(0,6,by=1))
+#Nilai Rounded Lambda
+lambda <- bc$x[which.max(bc$y)]
+lambda
+#SK
+bc$x[bc$y > max(bc$y) - 1/2 * qchisq(.95,1)]
+```
+
+#### Bagian 2
+
+```{r}
+dtgab2 <- dtgab[1:132] |> ts()
+mean(dtgab2)
+var(dtgab2)
+```
+
+#### Plot Time Series
+
+```{r}
+dtgab2 |> as_tsibble() |> 
+  ggplot(aes(x = index, y = value)) +
+  geom_line() + theme_bw() +
+  xlab("Obs") + ylab("Nilai")
+```
+
+Berdasarkan plot data deret waktu tersebut, terlihat bahwa data
+stasioner dalam rataan, ditandai dengan data yang tidak menunjukkan
+adanya trend ataupun musiman, serta tidak stasioner dalam ragam ditandai
+dengan lebar pita pada plot yang cenderung berbeda di beberapa periode
+waktunya
+
+#### Plot ACF
+
+```{r}
+acf(dtgab2)
+```
+
+Berdasarkan plot ACF tersebut, terlihat bahwa data stasioner dalam
+rataan ditandai dengan plot ACF yang *cuts off* pada lag ke 2
+
+#### Uji ADF
+
+```{r}
+adf.test(dtgab2)
+```
+
+$H_0$ : Data tidak stasioner dalam rataan
+
+$H_1$ : Data stasioner dalam rataan
+
+Berdasarkan uji ADF tersebut, didapat *p-value* sebesar 0.01383 yang
+kurang dari taraf nyata 5% dan menandakan bahwa data stasioner dalam
+rataan. Hal ini sesuai dengan hasil eksplorasi menggunakan plot time
+series dan plot ACF
+
+```{r}
+index <- seq(1:132)
+
+# Uji Box-Cox
+bc <- boxcox(
+  dtgab2 +15 ~ index,
+  lambda = seq(-2, 5, by = 0.001)
+)
+
+# Nilai lambda optimum (dibulatkan)
+lambda <- bc$x[which.max(bc$y)]
+lambda
+
+# Selang kepercayaan 95% untuk lambda
+ci_lambda <- bc$x[bc$y > max(bc$y) - 0.5 * qchisq(0.95, 1)]
+
+# Batas bawah dan batas atas
+ci_lower <- min(ci_lambda)
+ci_upper <- max(ci_lambda)
+
+c(Batas_Bawah = ci_lower, Batas_Atas = ci_upper)
+```
+
+## Tidak Stasioner dalam Rataan dan Ragam
+
+Hal ini dapat disimulasikan dengan membangkitkan data yang tidak
+stasioner dalam ragam lalu membentuk trend menggunakan data tersebut
+
+```{r}
+set.seed(8990)
+sd2 <- arima.sim(n=100, list(order=c(1,0,1),ar=c(.2), ma=.2), sd = 2)
+sd6 <- arima.sim(n=100, list(order=c(1,0,1),ar=c(.2), ma=.2), sd = 6)
+datagab <- c(sd2,sd6)
+dt_rg <- startSpot + cumsum(datagab)  |> ts() 
+dt_rg <- dt_rg +100
+```
+
+### Plot Time Series
+
+```{r}
+dt_rg |> as_tsibble() |> 
+  ggplot(aes(x = index, y = value)) +
+  geom_line() + theme_bw() +
+  xlab("Obs") + ylab("Nilai")
+```
+
+Berdasarkan plot time series tersebut, terlihat bahwa data tidak
+stasioner dalam rataan, ditandai dengan adanya trend pada data dan tidak
+stasioner dalam ragam, ditandai dengan adanya perbedaan lebar pita pada
+plot
+
+### Plot ACF
+
+```{r}
+acf(dt_rg)
+```
+
+Berdasarkan plot ACF, terlihat bahwa plot ACF pada data tersebut menurun
+secara perlahan (*tails off slowly*) yang menandakan data tidak
+stasioner dalam rataan
+
+### Uji ADF
+
+```{r}
+adf.test(dt_rg)
+```
+
+$H_0$ : Data tidak stasioner dalam rataan
+
+$H_1$ : Data stasioner dalam rataan
+
+Berdasarkan uji ADF tersebut, didapat *p-value* sebesar 0.6447 yang
+lebih besar dari taraf nyata 5% dan menandakan bahwa data tidak
+stasioner dalam rataan. Hal ini sesuai dengan hasil eksplorasi
+menggunakan plot time series dan plot ACF.
+
+```{r}
+index <- seq(1:200)
+
+# Uji Box-Cox
+bc <- boxcox(
+  dt_rg ~ index,
+  lambda = seq(-2, 5, by = 0.001)
+)
+
+# Nilai lambda optimum (dibulatkan)
+lambda <- bc$x[which.max(bc$y)]
+lambda
+
+# Selang kepercayaan 95% untuk lambda
+ci_lambda <- bc$x[bc$y > max(bc$y) - 0.5 * qchisq(0.95, 1)]
+
+# Batas bawah dan batas atas
+ci_lower <- min(ci_lambda)
+ci_upper <- max(ci_lambda)
+
+c(Batas_Bawah = ci_lower, Batas_Atas = ci_upper)
+```
+
+differencing
+
+```{r}
+# Differencing pertama pada postrend
+dt_rg_diff1 <- diff(dt_rg, differences = 1)
+
+```
+
+```{r}
+index <- seq(1:199)
+
+# Uji Box-Cox
+bc <- boxcox(
+  dt_rg_diff1 - min(dt_rg_diff1) + 1 ~ index,
+  lambda = seq(0, 5, by = 0.001)
+)
+
+# Nilai lambda optimum (dibulatkan)
+lambda <- bc$x[which.max(bc$y)]
+lambda
+
+# Selang kepercayaan 95% untuk lambda
+ci_lambda <- bc$x[bc$y > max(bc$y) - 0.5 * qchisq(0.95, 1)]
+
+# Batas bawah dan batas atas
+ci_lower <- min(ci_lambda)
+ci_upper <- max(ci_lambda)
+
+c(Batas_Bawah = ci_lower, Batas_Atas = ci_upper)
+```
+
+### Partisi Data
+
+#### Bagian 1
+
+```{r}
+dt_rg1 <- dt_rg[1:66] |> ts()
+mean(dt_rg1)
+var(dt_rg1)
+```
+
+#### Plot Time Series
+
+```{r}
+dt_rg1 |> as_tsibble() |> 
+  ggplot(aes(x = index, y = value)) +
+  geom_line() + theme_bw() +
+  xlab("Obs") + ylab("Nilai")
+```
+
+Berdasarkan plot time series tersebut, terlihat bahwa data tidak
+stasioner dalam rataan karena masih terdapat tren pada data, namun
+cenderung stasioner dalam ragam karena memiliki lebar pita yang
+cenderung sama
+
+#### Plot ACF
+
+```{r}
+acf(dt_rg1)
+```
+
+Berdasarkan plot ACF, terlihat bahwa plot ACF pada data tersebut menurun
+secara perlahan (*tails off slowly*) yang menandakan data tidak
+stasioner dalam rataan
+
+#### Uji ADF
+
+```{r}
+adf.test(dt_rg1)
+```
+
+$H_0$ : Data tidak stasioner dalam rataan
+
+$H_1$ : Data stasioner dalam rataan
+
+Berdasarkan uji ADF tersebut, didapat *p-value* sebesar 0.6816 yang
+lebih besar dari taraf nyata 5% dan menandakan bahwa data tidak
+stasioner dalam rataan. Hal ini sesuai dengan hasil eksplorasi
+menggunakan plot time series dan plot ACF
+
+#### Bagian 2
+
+```{r}
+dt_rg2 <- dt_rg[67:150] |> ts()
+mean(dt_rg2)
+var(dt_rg2)
+```
+
+#### Plot Time Series
+
+```{r}
+dt_rg2 |> as_tsibble() |> 
+  ggplot(aes(x = index, y = value)) +
+  geom_line() + theme_bw() +
+  xlab("Obs") + ylab("Nilai")
+```
+
+Berdasarkan plot time series tersebut, terlihat bahwa data tidak
+stasioner dalam rataan karena masih terdapat tren pada data, dan tidak
+stasioner dalam ragam karena memiliki lebar pita yang cenderung tidak
+sama
+
+#### Plot ACF
+
+```{r}
+acf(dt_rg2)
+```
+
+Berdasarkan plot ACF, terlihat bahwa plot ACF pada data tersebut menurun
+secara perlahan (*tails off slowly*) yang menandakan data tidak
+stasioner dalam rataan
+
+#### Uji ADF
+
+```{r}
+adf.test(dt_rg2)
+```
+
+$H_0$ : Data tidak stasioner dalam rataan
+
+$H_1$ : Data stasioner dalam rataan
+
+Berdasarkan uji ADF tersebut, didapat *p-value* sebesar 0.9202 yang
+lebih besar dari taraf nyata 5% dan menandakan bahwa data tidak
+stasioner dalam rataan. Hal ini sesuai dengan hasil eksplorasi
+menggunakan plot time series dan plot ACF
+
+```{r}
+index <- seq(1:84)
+
+# Uji Box-Cox
+bc <- boxcox(
+  dt_rg2 ~ index,
+  lambda = seq(0, 6, by = 1)
+)
+
+# Nilai lambda optimum (dibulatkan)
+lambda <- bc$x[which.max(bc$y)]
+lambda
+
+# Selang kepercayaan 95% untuk lambda
+ci_lambda <- bc$x[bc$y > max(bc$y) - 0.5 * qchisq(0.95, 1)]
+
+# Batas bawah dan batas atas
+ci_lower <- min(ci_lambda)
+ci_upper <- max(ci_lambda)
+
+c(Batas_Bawah = ci_lower, Batas_Atas = ci_upper)
+```
+
+#### Bagian 3
+
+```{r}
+dt_rg3 <- dt_rg[151:200] |> ts()
+mean(dt_rg3)
+var(dt_rg3)
+```
+
+#### Plot Time Series
+
+```{r}
+dt_rg3 |> as_tsibble() |> 
+  ggplot(aes(x = index, y = value)) +
+  geom_line() + theme_bw() +
+  xlab("Obs") + ylab("Nilai")
+```
+
+Berdasarkan plot time series tersebut, terlihat bahwa data tidak
+stasioner dalam rataan karena masih terdapat tren pada data, namun
+cenderung stasioner dalam ragam karena memiliki lebar pita yang
+cenderung sama
+
+#### Plot ACF
+
+```{r}
+acf(dt_rg3)
+```
+
+Berdasarkan plot ACF, terlihat bahwa plot ACF pada data tersebut menurun
+secara perlahan (*tails off slowly*)yang menandakan data tidak stasioner
+dalam rataan
+
+#### Uji ADF
+
+```{r}
+tseries::adf.test(dt_rg3,k=5)
+```
+
+$H_0$ : Data tidak stasioner dalam rataan
+
+$H_1$ : Data stasioner dalam rataan
+
+Berdasarkan uji ADF tersebut, didapat *p-value* sebesar 0.323 yang lebih
+besar dari taraf nyata 5% dan menandakan bahwa data tidak stasioner
+dalam rataan. Hal ini tidak sesuai dengan hasil eksplorasi menggunakan
+plot time series dan plot ACF
+
+
+# PERTEMUAN 6&7
+
+# Pendahuluan
+
+Dalam dokumen ini, kita akan membedah tuntas alur kerja pemodelan ARIMA (Autoregressive Integrated Moving Average) dari awal hingga akhir. Tujuannya adalah untuk memahami cara:
+
+1.  **Mengidentifikasi** pola dalam data deret waktu.
+
+2.  **Menentukan** model ARIMA yang paling sesuai.
+
+3.  **Mendiagnosis** kesehatan model yang terpilih.
+
+4.  **Melakukan peramalan** (forecast) untuk melihat ke masa depan.
+
+Untuk membuat proses belajar lebih efektif, kita akan menggunakan dua studi kasus:
+
+-   **Data Bangkitan (Simulasi):** Kita akan membuat data sendiri di mana kita tahu "jawaban" sebenarnya. Ini seperti berlatih di lingkungan yang terkendali untuk memastikan metode kita bekerja.
+
+-   **Data Riil (Kurs Mata Uang):** Kita akan menerapkan skill yang sudah kita pelajari pada data dunia nyata yang lebih kompleks dan tak terduga.
+
+## Packages
+
+```{r}
+library(ggplot2)
+library(tsibble)
+library(tseries)
+library(MASS)
+library(forecast)
+library(TSA)
+library(TTR)
+library(aTSA)
+library(graphics)
+```
+
+## Studi Kasus 1: Data Simulasi MA(2)
+
+Kita akan mulai dengan membangkitkan data dari model *Moving Average* orde 2 atau **MA(2)**. Kenapa? Karena kita tahu persis model aslinya, ini adalah cara terbaik untuk menguji apakah langkah-langkah analisis kita mampu menemukan kembali model yang benar.
+
+### Pembangkitan Data
+
+Kita akan membuat 175 observasi dari model MA(2) dengan parameter θ1​=0.55 dan θ2​=0.65, serta rata-rata (mean) sebesar 4.
+
+```{r}
+set.seed(99)
+ma2 <- arima.sim(list(order = c(0,0,2), ma = c(0.55,0.65)), n = 175)+4
+ma2
+```
+
+Selanjutnya, kita akan membuang 25 data pertama untuk menghindari efek awal (*warm-up effect*) dan membagi sisanya menjadi **data latih (80%)** untuk membangun model dan **data uji (20%)** untuk validasi peramalan.
+
+```{r}
+ma2 <- ma2[-c(1:25)]
+ma2.train <- ma2[1:120]
+ma2.test <- ma2[121:150]
+```
+
+### Eksplorasi Data
+
+Sebelum memodelkan, kita wajib "berkenalan" dengan data kita melalui visualisasi. Apakah data kita **stasioner**? Stasioner artinya rataan dan ragamnya konstan sepanjang waktu. Ini adalah syarat utama untuk pemodelan ARIMA.
+
+#### Plot Deret Waktu
+
+```{r}
+#--PLOT TIME SERIES--#
+plot(ma2.train,
+     col = "navyblue",
+     lwd = 1,
+     type = "o",
+     xlab = "Time",
+     ylab = "Data")
+```
+
+Berdasarkan plot data deret waktu di atas, terlihat data cenderung stasioner dalam rataan dan ragam. Data stasioner dalam rataan karena menyebar/bergerak di sekitar nilai tengahnya (0) dan dikatakan stasioner dalam ragam karena memiliki lebar pita yang cenderung sama. Selain dengan plot data deret waktu, akan dilakukan pengecekan stasioneritas data dengan plot ACF dan uji ADF.
+
+#### Plot ACF dan Uji Formal (Uji ADF)
+
+```{r}
+#--CEK KESTASIONERAN---#
+acf(ma2.train, main="ACF", lag.max=20)
+```
+
+Berdasarkan plot ACF di atas, dapat dilihat bahwa plot *cuts off* pada *lag* ke-2. Hal ini sesuai dengan proses pembangkitan model MA(2).
+
+```{r}
+tseries::adf.test(ma2.train) 
+#stasioner
+```
+
+$H_0$ : Data tidak stasioner dalam rataan
+
+$H_1$ : Data stasioner dalam rataan
+
+Berdasarkan uji ADF tersebut, didapat *p-value* sebesar 0.01358 yang lebih kecil dari taraf nyata 5% sehingga tolak $H_0$ dan menandakan bahwa data stasioner dalam rataan. Hal ini sesuai dengan hasil eksplorasi menggunakan plot time series dan plot ACF.
+
+```{r}
+index <- seq(1:120)
+bc = MASS::boxcox(ma2.train~index, lambda = seq(0,3,by=1))
+#Nilai Rounded Lambda
+lambda <- bc$x[which.max(bc$y)]
+lambda
+#SK
+bc$x[bc$y > max(bc$y) - 1/2 * qchisq(.95,1)]
+```
+
+### Spesifikasi Model
+
+```{r}
+#---SPESIFIKASI MODEL---#
+par(mfrow = c(1,2))
+acf(ma2.train, main="ACF", lag.max=20) #ARIMA(0,0,2)
+pacf(ma2.train, main="PACF", lag.max=20) #ARIMA(1,0,0)
+par(mfrow = c(1,1))
+```
+
+Berdasarkan Plot ACF, terlihat *cuts off* pada lag ke-2 sehingga dapat kita asumsikan model yang terbentuk adalah ARIMA(0,0,2). Selanjutnya, berdasarkan plot PACF, terlihat *cuts off* pada lag pertama sehingga model yang terbentuk adalah ARIMA(1,0,0). Selain dengan plot ACF dan PACF, penentuan spesifikasi model dilakukan dengan *extended ACF* (EACF) berikut ini.
+
+```{r}
+eacf(ma2.train) 
+#ARIMA(0,0,2) #ARIMA(1,0,3) #ARIMA(2,0,3) #ARIMA(3,0,3) 
+#Terdapat 5 model tentatif
+```
+
+Menggunakan plot EACF, dapat diambil beberapa model dengan melihat ujung segitiga yang terbentuk, antara lain ARIMA(0,0,2), ARIMA(1,0,3), ARIMA(2,0,3), dan ARIMA(3,0,3).
+
+### Pendugaan Parameter
+
+Selanjutnya akan dilakukan pendugaan parameter kelima model ARIMA yang terbentuk sebelumnya. Pendugaan dilakukan dengan fungsi `Arima()` yang dilanjutkan dengan melihat nilai AIC pada ringkasan data dan melihat signifikansi parameter.
+
+```{r}
+#---PENDUGAAN PARAMETER MODEL---#
+model1.ma2=Arima(ma2.train, order=c(0,0,2),method="ML")
+summary(model1.ma2) #AIC=326.87
+lmtest::coeftest(model1.ma2) #seluruh parameter signifikan
+
+model2.ma2=Arima(ma2.train, order=c(1,0,0),method="ML") 
+summary(model2.ma2) #AIC=340.47
+lmtest::coeftest(model2.ma2) #seluruh parameter signifikan
+
+model3.ma2=Arima(ma2.train, order=c(1,0,3),method="ML") 
+summary(model3.ma2) #AIC=329.22
+lmtest::coeftest(model3.ma2) #tidak ada yang signifikan
+
+model4.ma2=Arima(ma2.train, order=c(2,0,3),method="ML") 
+summary(model4.ma2) #AIC=330.6
+lmtest::coeftest(model4.ma2) #hanya ma2 yang signifikan
+
+model5.ma2=Arima(ma2.train, order=c(3,0,3),method="ML") 
+summary(model5.ma2) #AIC=329.87
+lmtest::coeftest(model5.ma2) #hanya ma1 dan ma2 yang signifikan
+
+#model yang dipilih adalah model 1, yaitu ARIMA(0,0,2)
+```
+
+Berdasarkan pendugaan parameter di atas, nilai AIC terkecil dimiliki oleh model ARIMA(0,0,2) dan parameter model ARIMA(0,0,2) juga seluruhnya signifikan sehingga model yang dipilih adalah model ARIMA(0,0,2).
+
+### Analisis Sisaan
+
+Model terbaik sudah dipilih, tapi apakah ia "sehat"? Sisaan (*residuals*) dari model yang baik harus memenuhi beberapa asumsi:
+
+-   **Normalitas:** Sisaan menyebar normal.
+
+-   **Independensi:** Tidak ada autokorelasi antar sisaan (saling bebas).
+
+-   **Homoskedastisitas:** Ragam sisaan homogen (konstan).
+
+-   **Rataan Nol:** Rata-rata sisaan sama dengan nol.
+
+#### Eksplorasi Sisaan
+
+```{r}
+#Eksplorasi
+sisaan.ma2 <- model1.ma2$residuals
+par(mfrow=c(2,2))
+#qqnorm(sisaan.ma2)
+#qqline(sisaan.ma2, col = "blue", lwd = 2)
+car::qqPlot(sisaan.ma2)
+plot(c(1:length(sisaan.ma2)),sisaan.ma2)
+acf(sisaan.ma2)
+pacf(sisaan.ma2)
+par(mfrow = c(1,1))
+```
+
+Berdasarkan plot kuantil-kuantil normal, secara eksplorasi ditunjukkan sisaan menyebar normal mengikuti garis $45^{\circ}$. Kemudian dapat dilihat juga lebar pita sisaan yang cenderung sama menandakan bahwa sisaan memiliki ragam yang homogen. Akan tetapi, plot ACF dan PACF sisaan ARIMA(0,0,2) signifikan pada lag ke-6 sehingga sisaan tidak saling bebas. Kondisi ini akan diuji lebih lanjut dengan uji formal.
+
+#### Uji Formal
+
+```{r}
+#1) Sisaan Menyebar Normal
+ks.test(sisaan.ma2,"pnorm") 
+#tak tolak H0 > sisaan menyebar normal
+```
+
+Selain dengan eksplorasi, asumsi tersebut dapat diuji menggunakan uji formal. Pada tahapan ini uji formal yang digunakan untuk normalitas adalah uji Kolmogorov-Smirnov (KS). Hipotesis pada uji KS adalah sebagai berikut.
+
+$H_0$ : Sisaan menyebar normal
+
+$H_1$ : Sisaan tidak menyebar normal
+
+Berdasarkan uji KS tersebut, didapat *p-value* sebesar 0.9788 yang lebih besar dari taraf nyata 5% sehingga tak tolak $H_0$ dan menandakan bahwa sisaan menyebar normal. Hal ini sesuai dengan hasil eksplorasi menggunakan plot kuantil-kuantil normal.
+
+```{r}
+#2) Sisaan saling bebas/tidak ada autokorelasi
+Box.test(sisaan.ma2, type = "Ljung") 
+#tak tolak H0 > sisaan saling bebas
+```
+
+Selanjutnya akan dilakukan uji formal untuk kebebasan sisaan menggunakan uji Ljung-Box. Hipotesis yang digunakan adalah sebagai berikut.
+
+$H_0$ : Sisaan saling bebas
+
+$H_1$ : Sisaan tidak tidak saling bebas
+
+Berdasarkan uji Ljung-Box tersebut, didapat *p-value* sebesar 0.5082 yang lebih besar dari taraf nyata 5% sehingga tak tolak $H_0$ dan menandakan bahwa sisaan saling bebas. Hal ini berbeda dengan eksplorasi.
+
+```{r}
+#3) Sisaan homogen
+Box.test((sisaan.ma2)^2, type = "Ljung") 
+#tak tolak H0 > sisaan homogen
+```
+
+Hipotesis yang digunakan untuk uji kehomogenan ragam adalah sebagai berikut.
+
+$H_0$ : Ragam sisaan homogen
+
+$H_1$ : Ragam sisaan tidak homogen
+
+Berdasarkan uji Ljung-Box terhadap sisaan kuadrat tersebut, didapat *p-value* sebesar 0.116 yang lebih besar dari taraf nyata 5% sehingga tak tolak $H_0$ dan menandakan bahwa ragam sisaan homogen.
+
+```{r}
+#4) Nilai tengah sisaan sama dengan nol
+t.test(sisaan.ma2, mu = 0, conf.level = 0.95) 
+#tak tolak h0 > nilai tengah sisaan sama dengan 0
+```
+
+Terakhir, dengan uji-t, akan dicek apakah nilai tengah sisaan sama dengan nol. Hipotesis yang diujikan sebagai berikut.
+
+$H_0$ : nilai tengah sisaan sama dengan 0
+
+$H_1$ : nilai tengah sisaan tidak sama dengan 0
+
+Berdasarkan uji-ttersebut, didapat *p-value* sebesar 0.9594 yang lebih besar dari taraf nyata 5% sehingga tak tolak $H_0$ dan menandakan bahwa nilai tengah sisaan sama dengan nol. Hal ini berbeda dengan eksplorasi.
+
+### Overfitting
+
+Tahapan selanjutnya adalah *overfitting* dilakukan dengan menaikkan orde AR(p) dan MA(q) dari model ARIMA(0,0,2) untuk melihat apakah terdapat model lain yang lebih baik dari model saat ini. Kandidat model *overfitting* adalah ARIMA(1,0,2) dan ARIMA(0,0,3).
+
+```{r}
+#---OVERFITTING---#
+model1a.ma2=Arima(ma2.train, order=c(1,0,2),method="ML")
+summary(model1a.ma2) #327.31
+lmtest::coeftest(model1a.ma2) #ar1 tidak signifikan
+
+model1b.ma2=Arima(ma2.train, order=c(0,0,3),method="ML")
+summary(model1b.ma2) #327.24
+lmtest::coeftest(model1b.ma2) #ma3 tidak signifikan
+
+#model yang dipilih adalah model awal, yaitu ARIMA(0,0,2)
+```
+
+Berdasarkan kedua model hasil *overfitting* di atas, model ARIMA(1,0,2) dan ARIMA(0,0,3) memiliki AIC yang lebih besar dibandingkan dengan model ARIMA(0,0,2) dan parameter kedua model ARIMA(1,0,2) dan ARIMA(0,0,3) tidak seluruhnya signifikan. Oleh karena itu, model ARIMA(0,0,2) akan tetap digunakan untuk melakukan peramalan.
+
+### Peramalan
+
+Peramalan dilakukan menggunakan fungsi `forecast()` . Contoh peramalan berikut ini dilakukan untuk 30 hari ke depan.
+
+```{r}
+#---FORECAST---#
+ramalan <- forecast::forecast(model1.ma2, h = 30) 
+ramalan
+data.ramalan <- ramalan$mean
+plot(ramalan)
+```
+
+Berdasarkan hasil plot ramalan di atas, dapat dilihat bahwa ramalan ARIMA(0,0,2) cenderung meningkat di awal periode dan stabil hingga akhir periode. Selanjutnya, dapat dicari nilai akurasi antara hasil ramalan dengan data uji sebagai berikut.
+
+```{r}
+perbandingan<-matrix(data=c(ma2.test, data.ramalan),
+                     nrow = 30, ncol = 2)
+colnames(perbandingan)<-c("Aktual","Hasil Forecast")
+perbandingan
+accuracy(data.ramalan, ma2.test)
+```
+
+## Data Asli
+
+Digunakan data kurs yang dalam hal ini hanya digunakan data 500 periode awal
+
+```{r}
+datakurs<-rio::import("https://raw.githubusercontent.com/rizkynurhambali/praktikum-sta1341/refs/heads/main/Pertemuan%2067/kurs.csv")
+datakurs <- datakurs[1:500,]
+datakurs.ts<-ts(datakurs)
+```
+
+### Eksplorasi Data
+
+#### Plot Data Penuh
+
+```{r}
+plot.ts(datakurs.ts, lty=1, xlab="waktu", ylab="Kurs", main="Plot Data Kurs")
+```
+
+Berdasarkan plot data deret waktu, terlihat bahwa data cenderung memiliki trend yang naik. Berdasarkan pola data, pembagian data latih dan data uji ditetapkan dengan proporsi 86%:14%.
+
+#### Plot Data Latih
+
+```{r}
+kurstrain<-datakurs[1:430]
+train.ts<-ts(kurstrain)
+plot.ts(train.ts, lty=1, xlab="waktu", ylab="Kurs", main="Plot Kurs Train")
+```
+
+Berdasarkan plot data deret waktu pada data latih, terlihat bahwa data cenderung memiliki trend yang naik dan cenderung tidak bergerak pada nilai tengah tertentu. Hal ini mengindikasikan bahwa data tidak stasioner dalam rataan.
+
+#### Plot Data Uji
+
+```{r}
+kurstest<-datakurs[431:500]
+test.ts<-ts(kurstest)
+plot.ts(test.ts, lty=1, xlab="waktu", ylab="Kurs", main="Plot Kurs Test")
+```
+
+### Uji Stasioneritas Data
+
+#### Plot ACF
+
+```{r}
+acf(train.ts)
+```
+
+Berdasarkan plot ACF, terlihat bahwa plot ACF data menurun secara perlahan (*tails of slowly*). Hal ini juga menjadi indikasi bahwa data tidak stasioner dalam rataan
+
+#### Uji ADF
+
+```{r}
+tseries::adf.test(train.ts)
+```
+
+$H_0$ : Data tidak stasioner dalam rataan
+
+$H_1$ : Data stasioner dalam rataan
+
+Berdasarkan uji ADF tersebut, didapat *p-value* sebesar 0.5553 yang lebih besar dari taraf nyata 5% sehingga tak tolak $H_0$ dan menandakan bahwa data tidak stasioner dalam rataan. Hal ini sesuai dengan hasil eksplorasi menggunakan plot time series dan plot ACF, sehingga ketidakstasioneran model kedepannya harus ditangani
+
+#### Plot Box-Cox
+
+```{r}
+index <- seq(1:430)
+bc = MASS::boxcox(train.ts~index, lambda = seq(5,10,by=1))
+#Nilai Rounded Lambda
+lambda <- bc$x[which.max(bc$y)]
+lambda
+#SK
+bc$x[bc$y > max(bc$y) - 1/2 * qchisq(.95,1)]
+```
+
+Plot Boxcox menunjukkan nilai *rounded value* ($\lambda$) optimum sebesar **6,62** dan pada selang kepercayaan 95% nilai memiliki batas bawah **5,66** dan batas atas **7,68**. Selang tersebut tidak memuat nilai satu sehingga dapat dikatakan bahwa data bangkitan tidak stasioner dalam ragam.
+
+### Penanganan Ketidakstasioneran Data
+
+```{r}
+train.diff<-diff(train.ts,differences = 1) 
+plot.ts(train.diff, lty=1, xlab="waktu", ylab="Data Difference 1 Kurs", main="Plot Difference Kurs")
+```
+
+Berdasarkan plot data deret waktu, terlihat bahwa data sudah stasioner dalam rataan ditandai dengan data bergerak pada nilai tengah tertentu (tidak terdapat trend ataupun musiman pada data)
+
+#### Plot Box Cox setelah Penanganan
+```{r}
+index <- seq(1:429)
+bc = MASS::boxcox(ts(train.diff+300)~index, lambda = seq(-2,2,by=1))
+#Nilai Rounded Lambda
+lambda <- bc$x[which.max(bc$y)]
+lambda
+#SK
+bc$x[bc$y > max(bc$y) - 1/2 * qchisq(.95,1)]
+```
+
+
+#### Plot ACF
+
+```{r}
+acf(train.diff)
+```
+
+Berdasarkan plot tersebut, terlihat bahwa plot ACF cuts off pada lag ke 1. Hal ini menandakan data sudah stasioner dalam rataan dan ketidakstasioneran data telah berhasil tertangani.
+
+#### Uji ADF
+
+```{r}
+tseries::adf.test(train.diff)
+```
+
+$H_0$ : Data tidak stasioner dalam rataan
+
+$H_1$ : Data stasioner dalam rataan
+
+Berdasarkan uji ADF tersebut, didapat *p-value* sebesar 0.01 yang lebih kecil dari taraf nyata 5% sehingga tolak $H_0$ atau data stasioner dalam rataan. Hal ini sesuai dengan hasil eksplorasi menggunakan plot time series dan plot ACF, sehingga dalam hal ini ketidakstasioneran data sudah berhasil ditangani dan dapat dilanjutkan ke pemodelan
+
+### Identifikasi Model
+
+#### Plot ACF
+
+```{r}
+acf(train.diff)
+```
+
+Berdasarkan plot tersebut, terlihat bahwa plot ACF cenderung *cuts off* pada lag ke 1, sehingga jika plot PACF dianggap *tails of*, maka model tentatifnya adalah ARIMA(0,1,1).
+
+#### Plot PACF
+
+```{r}
+pacf(train.diff)
+```
+
+Berdasarkan plot tersebut, terlihat bahwa plot PACF cenderung *cuts off* pada lag ke 1, sehingga jika plot ACF dianggap *tails of*, maka model tentatifnya adalah ARIMA(1,1,0).
+
+Jika baik plot ACF maupun plot PACF keduanya dianggap tails of, maka model yang terbentuk adalah ARIMA(1,1,1)
+
+#### Plot EACF
+
+```{r}
+eacf(train.diff)
+```
+
+Identifikasi model menggunakan plot EACF dilakukan dengan melihat ujung segitiga pada pola segitiga nol. Dalam hal ini model tentatif yang terbentuk adalah ARIMA(1,1,2), ARIMA(2,1,2), dan ARIMA(3,1,2).
+
+### Pendugaan Parameter Model Tentatif
+
+#### ARIMA(0,1,1)
+
+```{r}
+model1.da=Arima(train.diff, order=c(0,0,1),method="ML")
+summary(model1.da) #AIC=4752.56
+lmtest::coeftest(model1.da) #seluruh parameter signifikan
+```
+
+#### ARIMA(1,1,0)
+
+```{r}
+model2.da=Arima(train.diff, order=c(1,0,0),method="ML")
+summary(model2.da) #AIC=4753.48
+lmtest::coeftest(model2.da) #seluruh parameter signifikan
+```
+
+#### ARIMA(1,1,1)
+
+```{r}
+model3.da=Arima(train.diff, order=c(1,0,1),method="ML")
+summary(model3.da) #AIC=4754.1
+lmtest::coeftest(model3.da) #tidak ada parameter signifikan
+```
+
+#### ARIMA(1,1,2)
+
+```{r}
+model5.da=Arima(train.diff, order=c(1,0,2),method="ML")
+summary(model5.da) #AIC=4754.71
+lmtest::coeftest(model5.da) #terdapat parameter tidak signifikan
+```
+
+#### ARIMA(2,1,2)
+
+```{r}
+model6.da=Arima(train.diff, order=c(2,0,2),method="ML")
+summary(model6.da) #AIC=4755.46
+lmtest::coeftest(model6.da) #NaN
+```
+
+Berdasarkan pendugaan parameter di atas, nilai AIC terkecil dimiliki oleh model ARIMA(0,1,1) dan parameter model ARIMA(0,1,1) juga seluruhnya signifikan sehingga model yang dipilih adalah model ARIMA(0,1,1).
+
+### Analisis Sisaan
+
+Model terbaik hasil identifikasi kemudian dicek asumsi sisaannya. Sisaan model ARIMA harus memenuhi asumsi normalitas, kebebasan sisaan, dan kehomogenan ragam. Diagnostik model dilakukan secara eksplorasi dan uji formal.
+
+#### Eksplorasi Sisaan
+
+```{r}
+#Eksplorasi 
+sisaan.da <- model1.da$residuals 
+par(mfrow=c(2,2)) 
+qqnorm(sisaan.da) 
+qqline(sisaan.da, col = "blue", lwd = 2) 
+plot(c(1:length(sisaan.da)),sisaan.da) 
+acf(sisaan.da) 
+pacf(sisaan.da) 
+par(mfrow = c(1,1))
+```
+
+Berdasarkan plot kuantil-kuantil normal, secara eksplorasi ditunjukkan sisaan tidak menyebar normal ditandai dengan titik titik yang cenderung tidak mengikuti garis $45^{\circ}$. Kemudian dapat dilihat juga lebar pita sisaan yang cenderung tidak sama menandakan bahwa sisaan memiliki ragam yang heterogen. Plot ACF dan PACF sisaan ARIMA(0,1,1) juga tidak signifikan pada 20 lag awal yang menandakan saling bebas. Kondisi ini akan diuji lebih lanjut dengan uji formal.
+
+#### Uji Formal
+
+```{r}
+#1) Sisaan Menyebar Normal 
+ks.test(sisaan.da,"pnorm")  #tak tolak H0 > sisaan menyebar normal
+```
+
+Selain dengan eksplorasi, asumsi tersebut dapat diuji menggunakan uji formal. Pada tahapan ini uji formal yang digunakan untuk normalitas adalah uji Kolmogorov-Smirnov (KS). Hipotesis pada uji KS adalah sebagai berikut.
+
+$H_0$ : Sisaan menyebar normal
+
+$H_1$ : Sisaan tidak menyebar normal
+
+Berdasarkan uji KS tersebut, didapat *p-value* sebesar 0.00 yang kurang dari taraf nyata 5% sehingga tolak $H_0$ dan menandakan bahwa sisaan tidak menyebar normal. Hal ini sesuai dengan hasil eksplorasi menggunakan plot kuantil-kuantil normal.
+
+```{r}
+#2) Sisaan saling bebas/tidak ada autokorelasi 
+Box.test(sisaan.da, type = "Ljung")  #tak tolak H0 > sisaan saling bebas
+```
+
+Selanjutnya akan dilakukan uji formal untuk kebebasan sisaan menggunakan uji Ljung-Box. Hipotesis yang digunakan adalah sebagai berikut.
+
+$H_0$ : Sisaan saling bebas
+
+$H_1$ : Sisaan tidak tidak saling bebas
+
+Berdasarkan uji Ljung-Box tersebut, didapat *p-value* sebesar 0.8982 yang lebih besar dari taraf nyata 5% sehingga tak tolak $H_0$ dan menandakan bahwa sisaan saling bebas. Hal ini berbeda dengan eksplorasi.
+
+```{r}
+#3) Sisaan homogen 
+Box.test((sisaan.da)^2, type = "Ljung")  #tak tolak H0 > sisaan homogen
+```
+
+Hipotesis yang digunakan untuk uji kehomogenan ragam adalah sebagai berikut.
+
+$H_0$ : Ragam sisaan homogen
+
+$H_1$ : Ragam sisaan tidak homogen
+
+Berdasarkan uji Ljung-Box terhadap sisaan kuadrat tersebut, didapat *p-value* sebesar 4.02e-08 yang kurang dari taraf nyata 5% sehingga tak tolak $H_0$ dan menandakan bahwa ragam sisaan tidak homogen.
+
+```{r}
+#4) Nilai tengah sisaan sama dengan nol 
+t.test(sisaan.da, mu = 0, conf.level = 0.95)  #tak tolak h0 > nilai tengah sisaan sama dengan 0
+```
+
+Terakhir, dengan uji-t, akan dicek apakah nilai tengah sisaan sama dengan nol. Hipotesis yang diujikan sebagai berikut.
+
+$H_0$ : nilai tengah sisaan sama dengan 0
+
+$H_1$ : nilai tengah sisaan tidak sama dengan 0
+
+Berdasarkan uji-ttersebut, didapat *p-value* sebesar 0.9985 yang lebih besar dari taraf nyata 5% sehingga tak tolak $H_0$ dan menandakan bahwa nilai tengah sisaan sama dengan nol. Hal ini berbeda dengan eksplorasi.
+
+### Overfitting
+
+Karena model hasil overfitting sudah termasuk di dalam model tentatif dan hasilnya tidak lebih baik, maka model terbaik yang dipilih adalah ARIMA(0,1,1) dilanjutkan dengan peramalan.
+
+```{r}
+model3.da=Arima(train.diff, order=c(0,0,2),method="ML")
+summary(model3.da) #AIC=4754.1
+lmtest::coeftest(model3.da) #tidak ada parameter signifikan
+```
+
+### Peramalan
+
+Peramalan dilakukan menggunakan fungsi `forecast()` . Contoh peramalan berikut ini dilakukan untuk 30 hari ke depan.
+
+```{r}
+#---FORECAST---#
+ramalan.da <- forecast::forecast(model1.da, h = 30) 
+ramalan.da
+data.ramalan.da <- ramalan.da$mean
+plot(ramalan.da)
+```
+
+Berdasarkan hasil plot ramalan di atas, dapat dilihat bahwa ramalan ARIMA(0,1,1) cenderung stabil hingga akhir periode. Selanjutnya, dapat dicari nilai akurasi antara hasil ramalan dengan data uji sebagai berikut.
+
+```{r}
+pt_1 <- train.ts[430] #nilai akhir data latih
+hasil.forc.Diff <- data.ramalan.da
+hasil <- diffinv(hasil.forc.Diff, differences = 1) + pt_1
+#has.1 sama hasilnta dengan: cumsum(c(pt_1,hasil.forc.Diff))
+ts.plot(train.ts,hasil)
+```
+
+```{r}
+perbandingan.da<-matrix(data=c(head(test.ts, n=30), hasil[-1]),
+                     nrow = 30, ncol = 2)
+colnames(perbandingan.da)<-c("Aktual","Hasil Forecast")
+perbandingan.da
+accuracy(ts(hasil[-1]), head(test.ts, n=30))
+```
+
+
+
+
